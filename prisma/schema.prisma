@@ -1,0 +1,319 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  HOTEL_ADMIN
+  FRONT_DESK
+  HOUSEKEEPING
+  MAINTENANCE
+  ACCOUNTANT
+  POS_STAFF
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  CLEANING
+  INSPECTING
+  MAINTENANCE
+  OUT_OF_ORDER
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  NO_SHOW
+}
+
+enum ReservationSource {
+  DIRECT
+  BOOKING_COM
+  AIRBNB
+  EXPEDIA
+  PHONE
+  WALKIN
+}
+
+enum FolioItemCategory {
+  ROOM
+  FOOD
+  BEVERAGE
+  SPA
+  LAUNDRY
+  MINIBAR
+  OTHER
+}
+
+enum FolioStatus {
+  OPEN
+  CLOSED
+  VOID
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum HousekeepingTaskType {
+  STANDARD
+  DEEP_CLEAN
+  TURNDOWN
+  INSPECTION
+}
+
+enum HousekeepingTaskStatus {
+  TO_CLEAN
+  IN_PROGRESS
+  INSPECTING
+  DONE
+}
+
+enum HousekeepingPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum MaintenancePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum MaintenanceStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Hotel {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  config    Json
+  createdAt DateTime @default(now())
+
+  users              User[]
+  rooms              Room[]
+  roomTypes          RoomType[]
+  guests             Guest[]
+  reservations       Reservation[]
+  housekeepingTasks  HousekeepingTask[]
+  maintenanceOrders  MaintenanceOrder[]
+  shifts             Shift[]
+  auditLogs          AuditLog[]
+}
+
+model User {
+  id             String   @id @default(cuid())
+  hotelId        String
+  email          String
+  hashedPassword String
+  role           Role
+  name           String
+  createdAt      DateTime @default(now())
+
+  hotel                    Hotel              @relation(fields: [hotelId], references: [id])
+  assignedHousekeeping     HousekeepingTask[] @relation("AssignedHousekeeping")
+  reportedMaintenance      MaintenanceOrder[] @relation("ReportedMaintenance")
+  assignedMaintenance      MaintenanceOrder[] @relation("AssignedMaintenance")
+  shifts                   Shift[]
+  auditLogs                AuditLog[]
+
+  @@unique([hotelId, email])
+}
+
+model RoomType {
+  id            String   @id @default(cuid())
+  hotelId       String
+  name          String
+  description   String
+  pricePerNight Float
+  maxOccupancy  Int
+  amenities     String[]
+  images        String[]
+
+  hotel Hotel  @relation(fields: [hotelId], references: [id])
+  rooms Room[]
+}
+
+model Room {
+  id            String     @id @default(cuid())
+  hotelId       String
+  roomTypeId    String?
+  number        String
+  type          String
+  floor         Int
+  status        RoomStatus
+  pricePerNight Float
+  maxOccupancy  Int
+  amenities     String[]
+  images        String[]
+
+  hotel              Hotel              @relation(fields: [hotelId], references: [id])
+  roomType           RoomType?          @relation(fields: [roomTypeId], references: [id])
+  reservations       Reservation[]
+  housekeepingTasks  HousekeepingTask[]
+  maintenanceOrders  MaintenanceOrder[]
+
+  @@unique([hotelId, number])
+}
+
+model Guest {
+  id            String   @id @default(cuid())
+  hotelId       String
+  firstName     String
+  lastName      String
+  email         String
+  phone         String
+  nationality   String
+  idType        String?
+  idNumber      String?
+  dateOfBirth   DateTime?
+  preferences   Json?
+  totalStays    Int      @default(0)
+  loyaltyPoints Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  hotel        Hotel         @relation(fields: [hotelId], references: [id])
+  reservations Reservation[]
+}
+
+model Reservation {
+  id              String            @id @default(cuid())
+  hotelId         String
+  guestId         String
+  roomId          String
+  checkIn         DateTime
+  checkOut        DateTime
+  adults          Int
+  children        Int               @default(0)
+  status          ReservationStatus
+  source          ReservationSource
+  totalAmount     Float
+  depositAmount   Float             @default(0)
+  specialRequests String?
+  createdAt       DateTime          @default(now())
+
+  hotel  Hotel  @relation(fields: [hotelId], references: [id])
+  guest  Guest  @relation(fields: [guestId], references: [id])
+  room   Room   @relation(fields: [roomId], references: [id])
+  folios Folio[]
+}
+
+model Folio {
+  id            String      @id @default(cuid())
+  reservationId String
+  totalAmount   Float
+  paidAmount    Float       @default(0)
+  status        FolioStatus @default(OPEN)
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+  items       FolioItem[]
+  payments    Payment[]
+}
+
+model FolioItem {
+  id          String            @id @default(cuid())
+  folioId     String
+  description String
+  amount      Float
+  category    FolioItemCategory
+  createdAt   DateTime          @default(now())
+
+  folio Folio @relation(fields: [folioId], references: [id])
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  folioId   String
+  amount    Float
+  method    String
+  reference String?
+  status    PaymentStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+
+  folio Folio @relation(fields: [folioId], references: [id])
+}
+
+model HousekeepingTask {
+  id           String                 @id @default(cuid())
+  hotelId      String
+  roomId       String
+  assignedToId String?
+  type         HousekeepingTaskType
+  status       HousekeepingTaskStatus
+  priority     HousekeepingPriority
+  notes        String?
+  completedAt  DateTime?
+  createdAt    DateTime               @default(now())
+
+  hotel      Hotel @relation(fields: [hotelId], references: [id])
+  room       Room  @relation(fields: [roomId], references: [id])
+  assignedTo User? @relation("AssignedHousekeeping", fields: [assignedToId], references: [id])
+}
+
+model MaintenanceOrder {
+  id            String              @id @default(cuid())
+  hotelId       String
+  roomId        String?
+  reportedById  String
+  assignedToId  String?
+  title         String
+  description   String
+  priority      MaintenancePriority
+  status        MaintenanceStatus
+  estimatedCost Float?
+  completedAt   DateTime?
+  createdAt     DateTime            @default(now())
+
+  hotel      Hotel @relation(fields: [hotelId], references: [id])
+  room       Room? @relation(fields: [roomId], references: [id])
+  reportedBy User  @relation("ReportedMaintenance", fields: [reportedById], references: [id])
+  assignedTo User? @relation("AssignedMaintenance", fields: [assignedToId], references: [id])
+}
+
+model Shift {
+  id        String   @id @default(cuid())
+  hotelId   String
+  userId    String
+  startTime DateTime
+  endTime   DateTime
+  role      Role
+  notes     String?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  hotelId   String
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  before    Json?
+  after     Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+}
