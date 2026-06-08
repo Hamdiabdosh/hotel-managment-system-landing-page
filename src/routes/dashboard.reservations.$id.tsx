@@ -1,24 +1,42 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
-import { HOTEL_LIST } from "@/lib/config/hotels";
-import { MOCK_FOLIOS, MOCK_GUESTS, MOCK_RESERVATIONS, RES_STATUS_COLORS } from "@/lib/mock-data";
+import { getReservation, updateReservationStatus } from "@/lib/api/reservations.functions";
+import { VALID_STATUS_TRANSITIONS } from "@/lib/api/reservations.queries";
+import { RES_STATUS_COLORS } from "@/lib/mock-data";
+import { useHotelStore } from "@/store/hotelStore";
 import { formatCurrency, formatDate } from "@/lib/format";
+import type { ReservationStatus } from "@/lib/types";
 
 export const Route = createFileRoute("/dashboard/reservations/$id")({
-  loader: ({ params }) => {
-    const reservation = MOCK_RESERVATIONS.find((r) => r.id === params.id);
-    if (!reservation) throw notFound();
-    const guest = MOCK_GUESTS.find((g) => g.id === reservation.guestId);
-    const folio = MOCK_FOLIOS.find((f) => f.reservationId === reservation.id);
-    return { reservation, guest, folio };
+  loader: async ({ params }) => {
+    return getReservation({ data: { id: params.id } });
   },
   component: ReservationDetailPage,
 });
 
 function ReservationDetailPage() {
   const { reservation, guest, folio } = Route.useLoaderData();
-  const hotel = HOTEL_LIST[0]!;
+  const hotel = useHotelStore((s) => s.selectedHotel);
+  const router = useRouter();
+  const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const nextStatuses = VALID_STATUS_TRANSITIONS[reservation.status] ?? [];
+
+  const handleStatusChange = async (status: ReservationStatus) => {
+    setUpdating(true);
+    setError(null);
+    try {
+      await updateReservationStatus({ data: { id: reservation.id, status } });
+      await router.invalidate();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update status");
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   return (
     <ModuleErrorBoundary module="Reservation Detail">
@@ -56,6 +74,30 @@ function ReservationDetailPage() {
               <p className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 <strong>Requests:</strong> {reservation.specialRequests}
               </p>
+            )}
+
+            {nextStatuses.length > 0 && (
+              <div className="mt-6 border-t pt-4">
+                <h4 className="text-sm font-semibold">Update Status</h4>
+                {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {nextStatuses.map((status) => (
+                    <button
+                      key={status}
+                      disabled={updating}
+                      onClick={() => handleStatusChange(status)}
+                      className="rounded-md border px-3 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-50"
+                      style={
+                        status === "CANCELLED" || status === "NO_SHOW"
+                          ? undefined
+                          : { backgroundColor: "var(--hotel-primary)", color: "var(--hotel-accent)" }
+                      }
+                    >
+                      {status.replace("_", " ")}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 

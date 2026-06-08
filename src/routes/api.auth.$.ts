@@ -1,16 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MOCK_SESSION } from "@/lib/auth/types";
+import { getCurrentSession } from "@/lib/api/auth.functions";
 
-/** NextAuth v5 skeleton — returns mock session for GET, stub for POST. */
+/** Returns the current session JSON for client-side auth checks. */
 export const Route = createFileRoute("/api/auth/$")({
   server: {
     handlers: {
-      GET: () =>
-        new Response(JSON.stringify(MOCK_SESSION), {
+      GET: async () => {
+        const session = await getCurrentSession();
+        return new Response(JSON.stringify(session), {
           headers: { "Content-Type": "application/json" },
-        }),
+        });
+      },
       POST: () =>
-        new Response(JSON.stringify({ ok: true, message: "Auth handler stub" }), {
+        new Response(JSON.stringify({ error: "Use the login server function" }), {
+          status: 405,
           headers: { "Content-Type": "application/json" },
         }),
     },

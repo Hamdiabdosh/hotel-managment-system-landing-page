@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
-import { MOCK_SESSION } from "@/lib/auth/types";
+import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/dashboard/profile")({
   component: ProfilePage,
 });
 
 function ProfilePage() {
-  const { user } = MOCK_SESSION;
+  const { user } = useAuth();
 
   return (
     <ModuleErrorBoundary module="Profile">
@@ -30,7 +30,7 @@ function ProfilePage() {
           </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          Profile editing will be available once authentication is wired up.
+          Profile editing will be available in a future update.
         </p>
       </div>
     </ModuleErrorBoundary>

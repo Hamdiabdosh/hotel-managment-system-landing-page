@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   CalendarCheck,
@@ -17,7 +17,11 @@ import {
   LogOut,
   Hotel,
 } from "lucide-react";
-import { useHotelConfig } from "@/hooks/useHotelConfig";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { useHotelStore } from "@/store/hotelStore";
+import { useSidebarOpen } from "@/store/sidebarStore";
+import { useAuth } from "@/hooks/useAuth";
+import { logout } from "@/lib/api/auth.functions";
 import { cn } from "@/lib/utils";
 
 const groups = [
@@ -57,15 +61,25 @@ const groups = [
   },
 ] as const;
 
-export function DashboardSidebar() {
-  const hotel = useHotelConfig();
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+  const hotel = useHotelStore((s) => s.selectedHotel);
+  const { user } = useAuth();
+  const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const isActive = (to: string, exact?: boolean) =>
     exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
 
+  const initials = user.name.split(" ").map((n) => n[0]).join("");
+
+  const handleLogout = async () => {
+    await logout();
+    onNavigate?.();
+    router.navigate({ to: "/login" });
+  };
+
   return (
-    <aside className="hidden h-screen w-64 flex-col border-r bg-card md:flex">
+    <>
       <div className="flex items-center gap-3 border-b px-5 py-4">
         <div
           className="flex h-9 w-9 items-center justify-center rounded-md text-sm font-bold"
@@ -95,6 +109,7 @@ export function DashboardSidebar() {
                   <li key={item.to}>
                     <Link
                       to={item.to}
+                      onClick={onNavigate}
                       className={cn(
                         "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                         active
@@ -122,17 +137,40 @@ export function DashboardSidebar() {
       <div className="border-t p-3">
         <div className="flex items-center gap-3 rounded-md p-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold">
-            AM
+            {initials}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold">Alex Morgan</div>
-            <div className="text-[11px] text-muted-foreground">Hotel Admin</div>
+            <div className="truncate text-sm font-semibold">{user.name}</div>
+            <div className="text-[11px] text-muted-foreground">{user.role.replace("_", " ")}</div>
           </div>
-          <button className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Sign out">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            title="Sign out"
+          >
             <LogOut className="h-4 w-4" />
           </button>
         </div>
       </div>
-    </aside>
+    </>
+  );
+}
+
+export function DashboardSidebar() {
+  const { open, setOpen } = useSidebarOpen();
+
+  return (
+    <>
+      <aside className="hidden h-screen w-64 flex-col border-r bg-card md:flex">
+        <SidebarContent />
+      </aside>
+
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="left" className="flex w-64 flex-col p-0">
+          <SidebarContent onNavigate={() => setOpen(false)} />
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }

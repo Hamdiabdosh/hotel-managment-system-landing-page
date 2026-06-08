@@ -1,45 +1,92 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
+import { useState } from "react";
 import { Plus, LogIn, LogOut, FileText, MessageSquare } from "lucide-react";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
-import { MOCK_RESERVATIONS } from "@/lib/mock-data";
+import { ReservationForm } from "@/components/reservations/ReservationForm";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { checkIn, checkOut, getFrontDeskData } from "@/lib/api/front-desk.functions";
 import { useHotelStore } from "@/store/hotelStore";
 import { formatCurrency } from "@/lib/format";
-import type { Reservation } from "@/lib/types";
+import type { HotelConfig, Reservation } from "@/lib/types";
 
 export const Route = createFileRoute("/dashboard/front-desk")({
+  loader: async () => {
+    const hotel = useHotelStore.getState().selectedHotel;
+    return getFrontDeskData({ data: { hotelId: hotel.id } });
+  },
   component: FrontDeskPage,
 });
 
 function FrontDeskPage() {
   const hotel = useHotelStore((s) => s.selectedHotel);
-  const arrivals = MOCK_RESERVATIONS.filter((r) => r.status === "CONFIRMED" || r.status === "PENDING").slice(0, 6);
-  const departures = MOCK_RESERVATIONS.filter((r) => r.status === "CHECKED_IN").slice(0, 6);
+  const { arrivals, departures } = Route.useLoaderData();
+  const router = useRouter();
+  const [walkInOpen, setWalkInOpen] = useState(false);
 
   return (
     <ModuleErrorBoundary module="Front Desk">
-    <div className="space-y-5">
-      <div className="flex items-center justify-end">
-        <button
-          className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold"
-          style={{ backgroundColor: "var(--hotel-primary)", color: "var(--hotel-accent)" }}
-        >
-          <Plus className="h-4 w-4" /> Walk-in Booking
-        </button>
+      <div className="space-y-5">
+        <div className="flex items-center justify-end">
+          <button
+            onClick={() => setWalkInOpen(true)}
+            className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold"
+            style={{ backgroundColor: "var(--hotel-primary)", color: "var(--hotel-accent)" }}
+          >
+            <Plus className="h-4 w-4" /> Walk-in Booking
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Column title="Arrivals" subtitle={`${arrivals.length} expected today`} accent="emerald">
+            {arrivals.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">No arrivals today.</p>
+            ) : (
+              arrivals.map((r) => (
+                <DeskCard
+                  key={r.id}
+                  r={r}
+                  hotel={hotel}
+                  currency={hotel.currency}
+                  mode="check-in"
+                />
+              ))
+            )}
+          </Column>
+          <Column title="Departures" subtitle={`${departures.length} checking out`} accent="sky">
+            {departures.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">No departures today.</p>
+            ) : (
+              departures.map((r) => (
+                <DeskCard
+                  key={r.id}
+                  r={r}
+                  hotel={hotel}
+                  currency={hotel.currency}
+                  mode="check-out"
+                />
+              ))
+            )}
+          </Column>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Column title="Arrivals" subtitle={`${arrivals.length} expected today`} accent="emerald">
-          {arrivals.map((r) => (
-            <DeskCard key={r.id} r={r} currency={hotel.currency} primary={{ label: "Check In", icon: LogIn }} />
-          ))}
-        </Column>
-        <Column title="Departures" subtitle={`${departures.length} checking out`} accent="sky">
-          {departures.map((r) => (
-            <DeskCard key={r.id} r={r} currency={hotel.currency} primary={{ label: "Check Out", icon: LogOut }} />
-          ))}
-        </Column>
-      </div>
-    </div>
+      <Sheet open={walkInOpen} onOpenChange={setWalkInOpen}>
+        <SheetContent className="overflow-y-auto sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle className="font-serif">Walk-in Booking</SheetTitle>
+          </SheetHeader>
+          <div className="mt-6">
+            <ReservationForm
+              hotel={hotel}
+              onSubmit={() => {
+                setWalkInOpen(false);
+                router.invalidate();
+              }}
+              onCancel={() => setWalkInOpen(false)}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </ModuleErrorBoundary>
   );
 }
@@ -72,14 +119,42 @@ function Column({
 
 function DeskCard({
   r,
+  hotel,
   currency,
-  primary,
+  mode,
 }: {
   r: Reservation;
+  hotel: HotelConfig;
   currency: string;
-  primary: { label: string; icon: React.FC<{ className?: string }> };
+  mode: "check-in" | "check-out";
 }) {
-  const PrimaryIcon = primary.icon;
+  const router = useRouter();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isCheckIn = mode === "check-in";
+  const PrimaryIcon = isCheckIn ? LogIn : LogOut;
+  const label = isCheckIn ? "Check In" : "Check Out";
+  const loadingLabel = isCheckIn ? "Checking in…" : "Checking out…";
+
+  const handlePrimary = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (isCheckIn) {
+        await checkIn({ data: { reservationId: r.id, hotelId: hotel.id } });
+      } else {
+        await checkOut({ data: { reservationId: r.id, hotelId: hotel.id } });
+      }
+      router.invalidate();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `${label} failed`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="rounded-xl border bg-background p-4">
       <div className="flex items-start justify-between gap-2">
@@ -101,15 +176,21 @@ function DeskCard({
       )}
       <div className="mt-3 flex gap-2">
         <button
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold"
+          onClick={handlePrimary}
+          disabled={loading}
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
           style={{ backgroundColor: "var(--hotel-primary)", color: "var(--hotel-accent)" }}
         >
-          <PrimaryIcon className="h-3.5 w-3.5" /> {primary.label}
+          <PrimaryIcon className="h-3.5 w-3.5" /> {loading ? loadingLabel : label}
         </button>
-        <button className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted">
+        <button
+          onClick={() => navigate({ to: "/dashboard/billing", search: { folioId: r.id } })}
+          className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted"
+        >
           <FileText className="h-3.5 w-3.5" /> Folio
         </button>
       </div>
+      {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
     </div>
   );
 }

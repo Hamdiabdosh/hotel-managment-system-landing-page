@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
 import { ReservationForm } from "@/components/reservations/ReservationForm";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { listReservations } from "@/lib/api/reservations.functions";
 import { useReservations } from "@/hooks/useReservations";
 import { useSortableTable } from "@/hooks/useSortableTable";
 import { useHotelStore } from "@/store/hotelStore";
@@ -12,6 +13,13 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import type { ReservationSource, ReservationStatus } from "@/lib/types";
 
 export const Route = createFileRoute("/dashboard/reservations")({
+  loader: async () => {
+    const hotel = useHotelStore.getState().selectedHotel;
+    const result = await listReservations({
+      data: { hotelId: hotel.id, page: 0, pageSize: 200 },
+    });
+    return { reservations: result.reservations };
+  },
   component: ReservationsPage,
 });
 
@@ -25,7 +33,8 @@ const PAGE_SIZE = 10;
 
 function ReservationsPage() {
   const { selectedHotel: hotel } = useHotelStore();
-  const { reservations, filters, setFilters } = useReservations();
+  const loaderData = Route.useLoaderData();
+  const { reservations, filters, setFilters } = useReservations(loaderData.reservations);
   const [formOpen, setFormOpen] = useState(false);
   const [page, setPage] = useState(0);
 
@@ -182,7 +191,7 @@ function ReservationsPage() {
           <div className="mt-6">
             <ReservationForm
               hotel={hotel}
-              onSubmit={() => { setFormOpen(false); alert("Reservation created (mock)"); }}
+              onSubmit={() => setFormOpen(false)}
               onCancel={() => setFormOpen(false)}
             />
           </div>

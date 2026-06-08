@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useRouter } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { ChevronRight } from "lucide-react";
+import {
+  advanceHousekeepingTask,
+  assignHousekeepingTask,
+} from "@/lib/api/front-desk.functions";
+import { MOCK_STAFF } from "@/lib/mock-data";
+import { useHotelStore } from "@/store/hotelStore";
 import type { HousekeepingTask, HousekeepingTaskStatus } from "@/lib/types";
-import { HK_STATUS_COLORS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 const COLUMNS: { status: HousekeepingTaskStatus; label: string }[] = [
@@ -32,16 +38,70 @@ interface Props {
 export function HousekeepingBoard({ tasks: initial }: Props) {
   const [tasks, setTasks] = useState(initial);
   const [assignModal, setAssignModal] = useState<string | null>(null);
+  const [selectedStaffId, setSelectedStaffId] = useState("");
+  const hotel = useHotelStore((s) => s.selectedHotel);
+  const router = useRouter();
 
-  const advance = (id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id !== id) return t;
-        const next = NEXT_STATUS[t.status];
-        return next ? { ...t, status: next } : t;
-      }),
-    );
+  useEffect(() => {
+    setTasks(initial);
+  }, [initial]);
+
+  const advance = async (id: string) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+    const next = NEXT_STATUS[task.status];
+    if (!next) return;
+
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: next } : t)));
+
+    try {
+      await advanceHousekeepingTask({ data: { taskId: id, hotelId: hotel.id } });
+      router.invalidate();
+    } catch (err) {
+      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: task.status } : t)));
+      console.warn("[housekeeping] advance failed:", err);
+    }
   };
+
+  const handleAssign = async () => {
+    if (!assignModal || !selectedStaffId) return;
+    const taskId = assignModal;
+    const task = tasks.find((t) => t.id === taskId);
+    const staff = MOCK_STAFF.find((s) => s.id === selectedStaffId);
+
+    if (staff) {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? { ...t, assignedTo: staff.name, assignedInitials: staff.initials }
+            : t,
+        ),
+      );
+    }
+
+    try {
+      await assignHousekeepingTask({
+        data: { taskId, assignedToId: selectedStaffId, hotelId: hotel.id },
+      });
+    } catch (err) {
+      if (task) {
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === taskId
+              ? { ...t, assignedTo: task.assignedTo, assignedInitials: task.assignedInitials }
+              : t,
+          ),
+        );
+      }
+      console.warn("[housekeeping] assign failed:", err);
+    }
+
+    setAssignModal(null);
+    setSelectedStaffId("");
+    router.invalidate();
+  };
+
+  const housekeepingStaff = MOCK_STAFF.filter((s) => s.role === "HOUSEKEEPING" && s.active);
 
   return (
     <>
@@ -85,7 +145,10 @@ export function HousekeepingBoard({ tasks: initial }: Props) {
                         </button>
                       )}
                       <button
-                        onClick={() => setAssignModal(t.id)}
+                        onClick={() => {
+                          setAssignModal(t.id);
+                          setSelectedStaffId(housekeepingStaff[0]?.id ?? "");
+                        }}
                         className="rounded-md border px-2 py-1 text-[11px] font-medium hover:bg-muted"
                       >
                         Assign
@@ -106,21 +169,27 @@ export function HousekeepingBoard({ tasks: initial }: Props) {
           <div className="w-full max-w-sm rounded-2xl border bg-card p-6 shadow-xl">
             <h3 className="font-serif text-lg font-semibold">Assign Task</h3>
             <p className="mt-1 text-sm text-muted-foreground">Select a housekeeper for this room.</p>
-            <select className="mt-4 w-full rounded-md border bg-background px-3 py-2 text-sm">
-              <option>Maria Santos</option>
-              <option>James Chen</option>
-              <option>Aisha Patel</option>
-              <option>Tom Bradley</option>
+            <select
+              value={selectedStaffId}
+              onChange={(e) => setSelectedStaffId(e.target.value)}
+              className="mt-4 w-full rounded-md border bg-background px-3 py-2 text-sm"
+            >
+              {housekeepingStaff.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
             </select>
             <div className="mt-4 flex gap-2">
               <button
-                onClick={() => setAssignModal(null)}
+                onClick={() => {
+                  setAssignModal(null);
+                  setSelectedStaffId("");
+                }}
                 className="flex-1 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
               >
                 Cancel
               </button>
               <button
-                onClick={() => setAssignModal(null)}
+                onClick={handleAssign}
                 className="flex-1 rounded-md px-4 py-2 text-sm font-semibold"
                 style={{ backgroundColor: "var(--hotel-primary)", color: "var(--hotel-accent)" }}
               >
@@ -133,5 +202,3 @@ export function HousekeepingBoard({ tasks: initial }: Props) {
     </>
   );
 }
-
-export { HK_STATUS_COLORS };

@@ -1,6 +1,8 @@
 import { useForm } from "react-hook-form";
+import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { createReservation } from "@/lib/api/reservations.functions";
 import type { HotelConfig } from "@/lib/types";
 import { MOCK_GUESTS, MOCK_ROOMS } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/format";
@@ -25,15 +27,17 @@ type FormData = z.infer<typeof schema>;
 
 interface Props {
   hotel: HotelConfig;
-  onSubmit?: (data: FormData) => void;
+  onSubmit?: () => void;
   onCancel?: () => void;
 }
 
 export function ReservationForm({ hotel, onSubmit, onCancel }: Props) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const {
     register,
     handleSubmit,
     watch,
+    setError,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -49,8 +53,28 @@ export function ReservationForm({ hotel, onSubmit, onCancel }: Props) {
   const roomId = watch("roomId");
   const room = MOCK_ROOMS.find((r) => r.id === roomId);
 
+  const onFormSubmit = async (data: FormData) => {
+    setIsSubmitting(true);
+    try {
+      await createReservation({
+        data: {
+          ...data,
+          hotelId: hotel.id,
+          depositAmount: 0,
+        },
+      });
+      onSubmit?.();
+    } catch (err) {
+      setError("root", {
+        message: err instanceof Error ? err.message : "Failed to create reservation",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit((d) => onSubmit?.(d))} className="space-y-4">
+    <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
       <div>
         <label className="text-xs font-medium text-muted-foreground">Guest</label>
         <select {...register("guestId")} className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm">
@@ -121,13 +145,18 @@ export function ReservationForm({ hotel, onSubmit, onCancel }: Props) {
         </div>
       )}
 
+      {errors.root && (
+        <p className="text-sm text-rose-600">{errors.root.message}</p>
+      )}
+
       <div className="flex gap-2 pt-2">
         <button
           type="submit"
-          className="flex-1 rounded-md px-4 py-2 text-sm font-semibold"
+          disabled={isSubmitting}
+          className="flex-1 rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50"
           style={{ backgroundColor: "var(--hotel-primary)", color: "var(--hotel-accent)" }}
         >
-          Create Reservation
+          {isSubmitting ? "Creating…" : "Create Reservation"}
         </button>
         {onCancel && (
           <button type="button" onClick={onCancel} className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">

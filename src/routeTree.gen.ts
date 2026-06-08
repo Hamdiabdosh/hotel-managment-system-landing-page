@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as FaviconDoticoRouteImport } from './routes/favicon[.]ico'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
@@ -33,6 +35,16 @@ import { Route as DashboardReservationsIdRouteImport } from './routes/dashboard.
 import { Route as DashboardGuestsIdRouteImport } from './routes/dashboard.guests.$id'
 import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
 
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FaviconDoticoRoute = FaviconDoticoRouteImport.update({
+  id: '/favicon.ico',
+  path: '/favicon.ico',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -152,6 +164,8 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
+  '/favicon.ico': typeof FaviconDoticoRoute
+  '/login': typeof LoginRoute
   '/$hotel/book': typeof HotelBookRoute
   '/api/health': typeof ApiHealthRoute
   '/dashboard/billing': typeof DashboardBillingRoute
@@ -176,6 +190,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/favicon.ico': typeof FaviconDoticoRoute
+  '/login': typeof LoginRoute
   '/$hotel/book': typeof HotelBookRoute
   '/api/health': typeof ApiHealthRoute
   '/dashboard/billing': typeof DashboardBillingRoute
@@ -202,6 +218,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
+  '/favicon.ico': typeof FaviconDoticoRoute
+  '/login': typeof LoginRoute
   '/$hotel/book': typeof HotelBookRoute
   '/api/health': typeof ApiHealthRoute
   '/dashboard/billing': typeof DashboardBillingRoute
@@ -229,6 +247,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/favicon.ico'
+    | '/login'
     | '/$hotel/book'
     | '/api/health'
     | '/dashboard/billing'
@@ -253,6 +273,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/favicon.ico'
+    | '/login'
     | '/$hotel/book'
     | '/api/health'
     | '/dashboard/billing'
@@ -278,6 +300,8 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/favicon.ico'
+    | '/login'
     | '/$hotel/book'
     | '/api/health'
     | '/dashboard/billing'
@@ -304,6 +328,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRouteWithChildren
+  FaviconDoticoRoute: typeof FaviconDoticoRoute
+  LoginRoute: typeof LoginRoute
   HotelBookRoute: typeof HotelBookRoute
   ApiHealthRoute: typeof ApiHealthRoute
   HotelIndexRoute: typeof HotelIndexRoute
@@ -312,6 +338,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/favicon.ico': {
+      id: '/favicon.ico'
+      path: '/favicon.ico'
+      fullPath: '/favicon.ico'
+      preLoaderRoute: typeof FaviconDoticoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
@@ -553,6 +593,8 @@ const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRouteWithChildren,
+  FaviconDoticoRoute: FaviconDoticoRoute,
+  LoginRoute: LoginRoute,
   HotelBookRoute: HotelBookRoute,
   ApiHealthRoute: ApiHealthRoute,
   HotelIndexRoute: HotelIndexRoute,

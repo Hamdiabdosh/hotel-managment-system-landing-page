@@ -22,10 +22,10 @@ function Index() {
         <div className="flex items-center justify-between">
           <div className="font-serif text-2xl font-bold tracking-tight">Atrium HMS</div>
           <Link
-            to="/dashboard"
+            to="/login"
             className="inline-flex items-center gap-2 rounded-md border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
           >
-            <LayoutDashboard className="h-4 w-4" /> Open dashboard
+            <LayoutDashboard className="h-4 w-4" /> Staff login
           </Link>
         </div>
 

@@ -1,10 +1,9 @@
-import { useState } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { useRouterState } from "@tanstack/react-router";
 import { Bell, Search, ChevronDown, Menu } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { HOTEL_LIST } from "@/lib/config/hotels";
 import { useHotelStore } from "@/store/hotelStore";
-import { MOCK_SESSION } from "@/lib/auth/types";
+import { useSidebarOpen } from "@/store/sidebarStore";
+import { useAuth } from "@/hooks/useAuth";
 
 const TITLES: Record<string, string> = {
   "/dashboard": "Overview",
@@ -24,23 +23,11 @@ const TITLES: Record<string, string> = {
   "/dashboard/profile": "My Profile",
 };
 
-const MOBILE_LINKS = [
-  { to: "/dashboard", label: "Overview" },
-  { to: "/dashboard/reservations", label: "Reservations" },
-  { to: "/dashboard/front-desk", label: "Front Desk" },
-  { to: "/dashboard/rooms", label: "Rooms" },
-  { to: "/dashboard/housekeeping", label: "Housekeeping" },
-  { to: "/dashboard/guests", label: "Guests" },
-  { to: "/dashboard/billing", label: "Billing" },
-  { to: "/dashboard/pos", label: "POS" },
-  { to: "/dashboard/reports", label: "Reports" },
-  { to: "/dashboard/settings/hotel", label: "Settings" },
-] as const;
-
 export function DashboardTopbar() {
   const { selectedHotel, setSelectedHotel } = useHotelStore();
+  const { setOpen } = useSidebarOpen();
+  const { user } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const [mobileOpen, setMobileOpen] = useState(false);
   const title =
     TITLES[pathname] ??
     (pathname.startsWith("/dashboard/guests/") ? "Guest Profile" : null) ??
@@ -51,11 +38,11 @@ export function DashboardTopbar() {
     <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b bg-background/95 px-6 backdrop-blur">
       <button
         type="button"
-        onClick={() => setMobileOpen(true)}
-        className="rounded-md border p-2 md:hidden"
+        onClick={() => setOpen(true)}
+        className="flex items-center justify-center rounded-md p-2 text-muted-foreground hover:bg-muted md:hidden"
         aria-label="Open menu"
       >
-        <Menu className="h-4 w-4" />
+        <Menu className="h-5 w-5" />
       </button>
       <h1 className="font-serif text-xl font-semibold tracking-tight">{title}</h1>
 
@@ -88,34 +75,10 @@ export function DashboardTopbar() {
         </button>
         <div className="hidden items-center gap-2 md:flex">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-bold">
-            {MOCK_SESSION.user.name.split(" ").map((n) => n[0]).join("")}
+            {user.name.split(" ").map((n) => n[0]).join("")}
           </div>
         </div>
       </div>
-
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-72 p-0">
-          <SheetHeader className="border-b p-4">
-            <SheetTitle className="font-serif text-left">{selectedHotel.name}</SheetTitle>
-          </SheetHeader>
-          <nav className="flex flex-col p-2">
-            {MOBILE_LINKS.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                onClick={() => setMobileOpen(false)}
-                className={`rounded-md px-3 py-2.5 text-sm font-medium ${
-                  pathname === link.to || pathname.startsWith(link.to + "/")
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:bg-muted/60"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-        </SheetContent>
-      </Sheet>
     </header>
   );
 }

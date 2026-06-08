@@ -20,11 +20,12 @@ const DEFAULT_FILTERS: ReservationFilters = {
   dateTo: "",
 };
 
-export function useReservations(initial?: Partial<ReservationFilters>) {
+export function useReservations(data?: Reservation[], initial?: Partial<ReservationFilters>) {
+  const source = data ?? MOCK_RESERVATIONS;
   const [filters, setFilters] = useState<ReservationFilters>({ ...DEFAULT_FILTERS, ...initial });
 
   const reservations = useMemo(() => {
-    return MOCK_RESERVATIONS.filter((r) => {
+    return source.filter((r) => {
       if (filters.status !== "ALL" && r.status !== filters.status) return false;
       if (filters.source !== "ALL" && r.source !== filters.source) return false;
       if (filters.roomType !== "ALL" && r.roomType !== filters.roomType) return false;
@@ -39,10 +40,9 @@ export function useReservations(initial?: Partial<ReservationFilters>) {
       }
       return true;
     });
-  }, [filters]);
+  }, [source, filters]);
 
-  const getById = (id: string): Reservation | undefined =>
-    MOCK_RESERVATIONS.find((r) => r.id === id);
+  const getById = (id: string): Reservation | undefined => source.find((r) => r.id === id);
 
   return { reservations, filters, setFilters, getById };
 }

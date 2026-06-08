@@ -1,9 +1,20 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardTopbar } from "@/components/dashboard/DashboardTopbar";
+import { getCurrentSession } from "@/lib/api/auth.functions";
 import { useHotelStore } from "@/store/hotelStore";
 
 export const Route = createFileRoute("/dashboard")({
+  beforeLoad: async ({ location }) => {
+    const auth = await getCurrentSession();
+    if (!auth) {
+      throw redirect({
+        to: "/login",
+        search: { redirect: location.pathname },
+      });
+    }
+    return { auth };
+  },
   component: DashboardLayout,
 });
 
