@@ -1,8 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
+import { getCurrentSession } from "@/lib/api/auth.functions";
+import { canAccess } from "@/lib/rbac";
 import { useHotelStore } from "@/store/hotelStore";
 import { formatCurrency } from "@/lib/format";
 
@@ -29,6 +31,14 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 export const Route = createFileRoute("/dashboard/settings/hotel")({
+  beforeLoad: async () => {
+    const session = await getCurrentSession();
+    if (!session) throw redirect({ to: "/login" });
+    if (!canAccess(session.user.role, "/dashboard/settings")) {
+      throw redirect({ to: "/dashboard" });
+    }
+    return { session };
+  },
   component: HotelSettingsPage,
 });
 

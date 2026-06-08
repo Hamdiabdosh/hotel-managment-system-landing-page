@@ -1,4 +1,5 @@
 import { useSession } from "@tanstack/react-start/server";
+import { assertRole, type ActionKey } from "@/lib/rbac";
 import type { StaffRole } from "@/lib/types";
 
 export interface SessionData {
@@ -27,4 +28,10 @@ export async function requireSessionUser(): Promise<SessionData> {
     throw new Error("Unauthorized");
   }
   return session.data;
+}
+
+export async function requireAction(action: ActionKey): Promise<SessionData> {
+  const user = await requireSessionUser();
+  assertRole(user.role, action);
+  return user;
 }

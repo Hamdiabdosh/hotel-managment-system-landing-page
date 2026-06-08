@@ -2,6 +2,7 @@ import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-rout
 import { useState } from "react";
 import { z } from "zod";
 import { login, getCurrentSession } from "@/lib/api/auth.functions";
+import { ROLE_HOME } from "@/lib/rbac";
 import { HOTEL_LIST } from "@/lib/config/hotels";
 import { useHotelStore } from "@/store/hotelStore";
 
@@ -13,7 +14,7 @@ export const Route = createFileRoute("/login")({
   validateSearch: searchSchema,
   beforeLoad: async () => {
     const session = await getCurrentSession();
-    if (session) throw redirect({ to: "/dashboard" });
+    if (session) throw redirect({ to: ROLE_HOME[session.user.role] });
   },
   component: LoginPage,
 });
@@ -38,7 +39,7 @@ function LoginPage() {
       const session = await login({ data: { email, password } });
       const userHotel = HOTEL_LIST.find((h) => h.id === session.user.hotelId);
       if (userHotel) setSelectedHotel(userHotel.slug);
-      router.navigate({ to: redirectTo ?? "/dashboard" });
+      router.navigate({ to: redirectTo ?? ROLE_HOME[session.user.role] });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -108,9 +109,18 @@ function LoginPage() {
           </div>
         </form>
 
-        <p className="mt-4 text-center text-xs text-muted-foreground">
-          Demo: alex@grandpalace.com / password123
-        </p>
+        <details className="mt-4 text-center text-xs text-muted-foreground">
+          <summary className="cursor-pointer hover:text-foreground">Demo accounts (password: password123)</summary>
+          <ul className="mt-2 space-y-1 text-left">
+            <li>alex@grandpalace.com — Hotel Admin</li>
+            <li>frontdesk@grandpalace.com — Front Desk</li>
+            <li>housekeeping@grandpalace.com — Housekeeping</li>
+            <li>maintenance@grandpalace.com — Maintenance</li>
+            <li>accounting@grandpalace.com — Accountant</li>
+            <li>pos@grandpalace.com — POS Staff</li>
+            <li>admin@atrium.app — Super Admin</li>
+          </ul>
+        </details>
         <p className="mt-2 text-center text-sm">
           <Link to="/" className="text-muted-foreground hover:text-foreground">
             ← Back to home

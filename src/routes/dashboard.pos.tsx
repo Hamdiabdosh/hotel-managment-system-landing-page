@@ -1,13 +1,23 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
+import { getCurrentSession } from "@/lib/api/auth.functions";
+import { canAccess } from "@/lib/rbac";
 import { HOTEL_LIST } from "@/lib/config/hotels";
 import { MOCK_POS_ITEMS } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/format";
 import type { PosOrderItem } from "@/lib/types";
 
 export const Route = createFileRoute("/dashboard/pos")({
+  beforeLoad: async () => {
+    const session = await getCurrentSession();
+    if (!session) throw redirect({ to: "/login" });
+    if (!canAccess(session.user.role, "/dashboard/pos")) {
+      throw redirect({ to: "/dashboard" });
+    }
+    return { session };
+  },
   component: PosPage,
 });
 

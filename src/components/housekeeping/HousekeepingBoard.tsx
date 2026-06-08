@@ -33,9 +33,10 @@ const PRIORITY_COLORS = {
 
 interface Props {
   tasks: HousekeepingTask[];
+  canAssign?: boolean;
 }
 
-export function HousekeepingBoard({ tasks: initial }: Props) {
+export function HousekeepingBoard({ tasks: initial, canAssign = true }: Props) {
   const [tasks, setTasks] = useState(initial);
   const [assignModal, setAssignModal] = useState<string | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState("");
@@ -144,15 +145,17 @@ export function HousekeepingBoard({ tasks: initial }: Props) {
                           Advance <ChevronRight className="h-3 w-3" />
                         </button>
                       )}
-                      <button
-                        onClick={() => {
-                          setAssignModal(t.id);
-                          setSelectedStaffId(housekeepingStaff[0]?.id ?? "");
-                        }}
-                        className="rounded-md border px-2 py-1 text-[11px] font-medium hover:bg-muted"
-                      >
-                        Assign
-                      </button>
+                      {canAssign && (
+                        <button
+                          onClick={() => {
+                            setAssignModal(t.id);
+                            setSelectedStaffId(housekeepingStaff[0]?.id ?? "");
+                          }}
+                          className="rounded-md border px-2 py-1 text-[11px] font-medium hover:bg-muted"
+                        >
+                          Assign
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

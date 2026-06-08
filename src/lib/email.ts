@@ -1,9 +1,16 @@
-/** Email sending stub — wire to a provider when ready. */
-export async function sendEmail(_params: {
+export async function sendInviteEmail(opts: {
   to: string;
-  subject: string;
-  body: string;
-}): Promise<{ ok: boolean; messageId?: string }> {
-  console.info("[email stub] sendEmail called");
-  return { ok: true, messageId: `stub-${Date.now()}` };
+  name: string;
+  role: string;
+  tempPassword: string;
+}): Promise<void> {
+  console.warn("[email] sendInviteEmail stub — integrate SMTP/Resend to enable:", opts.to);
+}
+
+export async function sendPasswordResetEmail(opts: {
+  to: string;
+  name: string;
+  tempPassword: string;
+}): Promise<void> {
+  console.warn("[email] sendPasswordResetEmail stub — integrate SMTP/Resend to enable:", opts.to);
 }

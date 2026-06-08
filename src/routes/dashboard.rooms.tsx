@@ -1,19 +1,33 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
 import { RoomCard } from "@/components/rooms/RoomCard";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { updateRoomStatus } from "@/lib/api/front-desk.functions";
 import { listRoomsForHotel } from "@/lib/api/rooms.functions";
+import { getCurrentSession } from "@/lib/api/auth.functions";
+import { canAccess } from "@/lib/rbac";
 import { useHotelStore } from "@/store/hotelStore";
-import { ROOM_STATUS_COLORS } from "@/lib/mock-data";
+import { MOCK_HOUSEKEEPING, MOCK_ROOMS, ROOM_STATUS_COLORS } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/format";
 import type { Room, RoomStatus } from "@/lib/types";
 
 export const Route = createFileRoute("/dashboard/rooms")({
+  beforeLoad: async () => {
+    const session = await getCurrentSession();
+    if (!session) throw redirect({ to: "/login" });
+    if (!canAccess(session.user.role, "/dashboard/rooms")) {
+      throw redirect({ to: "/dashboard" });
+    }
+    return { session };
+  },
   loader: async () => {
     const hotel = useHotelStore.getState().selectedHotel;
-    return listRoomsForHotel({ data: { hotelId: hotel.id } });
+    try {
+      return await listRoomsForHotel({ data: { hotelId: hotel.id } });
+    } catch {
+      return { rooms: MOCK_ROOMS, activeStays: [], housekeepingTasks: MOCK_HOUSEKEEPING };
+    }
   },
   component: RoomsPage,
 });

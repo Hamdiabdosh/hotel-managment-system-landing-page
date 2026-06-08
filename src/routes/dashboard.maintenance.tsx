@@ -1,11 +1,21 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
+import { getCurrentSession } from "@/lib/api/auth.functions";
+import { canAccess } from "@/lib/rbac";
 import { MOCK_MAINTENANCE, MAINTENANCE_PRIORITY_COLORS, MAINTENANCE_STATUS_COLORS } from "@/lib/mock-data";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { HOTEL_LIST } from "@/lib/config/hotels";
 
 export const Route = createFileRoute("/dashboard/maintenance")({
+  beforeLoad: async () => {
+    const session = await getCurrentSession();
+    if (!session) throw redirect({ to: "/login" });
+    if (!canAccess(session.user.role, "/dashboard/maintenance")) {
+      throw redirect({ to: "/dashboard" });
+    }
+    return { session };
+  },
   component: MaintenancePage,
 });
 

@@ -174,6 +174,11 @@ export interface StaffMember {
   department: string;
 }
 
+export interface StaffMemberDetail extends StaffMember {
+  createdAt: string;
+  shiftsThisWeek: number;
+}
+
 export type MaintenancePriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type MaintenanceStatus = "OPEN" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 
@@ -223,4 +228,99 @@ export interface Reservation {
   source: ReservationSource;
   totalAmount: number;
   specialRequests?: string;
+}
+
+export type LoyaltyTier = "Bronze" | "Silver" | "Gold" | "Platinum";
+
+export interface LoyaltyLedgerEntry {
+  id: string;
+  delta: number;
+  reason: string;
+  createdAt: string;
+  balanceAfter: number;
+}
+
+export interface GuestStaySummary {
+  reservationId: string;
+  code: string;
+  roomNumber: string;
+  roomType: string;
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  totalAmount: number;
+  status: ReservationStatus;
+}
+
+export interface GuestDetail extends Guest {
+  stays: GuestStaySummary[];
+  loyaltyTier: LoyaltyTier;
+  ledger: LoyaltyLedgerEntry[];
+}
+
+export interface CreateGuestInput {
+  hotelId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  nationality: string;
+  idType?: string;
+  idNumber?: string;
+  dateOfBirth?: string;
+  preferences?: Record<string, string>;
+}
+
+export interface DateRange {
+  from: string;
+  to: string;
+}
+
+export interface ReportKpis {
+  occupancyPct: number;
+  revPAR: number;
+  adr: number;
+  totalRevenue: number;
+  newGuests: number;
+  totalRooms: number;
+}
+
+export interface OccupancyDataPoint {
+  date: string;
+  occupancyPct: number;
+}
+
+export interface RevenueDataPoint {
+  date: string;
+  revenue: number;
+}
+
+export interface RevenueBySourceDataPoint {
+  source: string;
+  revenue: number;
+  bookings: number;
+}
+
+export interface OccupancyByTypeDataPoint {
+  type: string;
+  occupancyPct: number;
+  totalRooms: number;
+}
+
+export interface TopGuestRow {
+  guestId: string;
+  guestName: string;
+  totalStays: number;
+  totalSpend: number;
+  loyaltyPoints: number;
+  loyaltyTier: LoyaltyTier;
+}
+
+export interface ReportData {
+  kpis: ReportKpis;
+  occupancyOverTime: OccupancyDataPoint[];
+  revenueOverTime: RevenueDataPoint[];
+  revenueBySource: RevenueBySourceDataPoint[];
+  occupancyByType: OccupancyByTypeDataPoint[];
+  topGuests: TopGuestRow[];
 }

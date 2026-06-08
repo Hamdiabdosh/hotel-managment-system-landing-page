@@ -1,8 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Globe, Link2, RefreshCw } from "lucide-react";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
+import { getCurrentSession } from "@/lib/api/auth.functions";
+import { canAccess } from "@/lib/rbac";
 
 export const Route = createFileRoute("/dashboard/channel-manager")({
+  beforeLoad: async () => {
+    const session = await getCurrentSession();
+    if (!session) throw redirect({ to: "/login" });
+    if (!canAccess(session.user.role, "/dashboard/channel-manager")) {
+      throw redirect({ to: "/dashboard" });
+    }
+    return { session };
+  },
   component: ChannelManagerPage,
 });
 

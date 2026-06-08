@@ -1,29 +1,53 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, redirect, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
 import { getReservation, updateReservationStatus } from "@/lib/api/reservations.functions";
+import { getCurrentSession } from "@/lib/api/auth.functions";
+import { canAccess } from "@/lib/rbac";
+import { usePermissions } from "@/hooks/usePermissions";
 import { VALID_STATUS_TRANSITIONS } from "@/lib/api/reservations.queries";
-import { RES_STATUS_COLORS } from "@/lib/mock-data";
+import { RES_STATUS_COLORS, MOCK_FOLIOS, MOCK_GUESTS, MOCK_RESERVATIONS } from "@/lib/mock-data";
 import { useHotelStore } from "@/store/hotelStore";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { ReservationStatus } from "@/lib/types";
 
 export const Route = createFileRoute("/dashboard/reservations/$id")({
+  beforeLoad: async () => {
+    const session = await getCurrentSession();
+    if (!session) throw redirect({ to: "/login" });
+    if (!canAccess(session.user.role, "/dashboard/reservations")) {
+      throw redirect({ to: "/dashboard" });
+    }
+    return { session };
+  },
   loader: async ({ params }) => {
-    return getReservation({ data: { id: params.id } });
+    try {
+      return await getReservation({ data: { id: params.id } });
+    } catch {
+      const reservation = MOCK_RESERVATIONS.find((r) => r.id === params.id);
+      if (!reservation) throw notFound();
+      const guest = MOCK_GUESTS.find((g) => g.id === reservation.guestId);
+      const folio = MOCK_FOLIOS.find((f) => f.reservationId === reservation.id);
+      return { reservation, guest, folio };
+    }
   },
   component: ReservationDetailPage,
 });
 
 function ReservationDetailPage() {
   const { reservation, guest, folio } = Route.useLoaderData();
+  const { session } = Route.useRouteContext();
+  const { can } = usePermissions(session.user.role);
   const hotel = useHotelStore((s) => s.selectedHotel);
   const router = useRouter();
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const nextStatuses = VALID_STATUS_TRANSITIONS[reservation.status] ?? [];
+  const nextStatuses = (VALID_STATUS_TRANSITIONS[reservation.status] ?? []).filter((status) => {
+    if (status === "CANCELLED") return can("cancelReservation");
+    return can("updateReservationStatus");
+  });
 
   const handleStatusChange = async (status: ReservationStatus) => {
     setUpdating(true);

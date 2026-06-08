@@ -20,11 +20,13 @@ import {
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useHotelStore } from "@/store/hotelStore";
 import { useSidebarOpen } from "@/store/sidebarStore";
-import { useAuth } from "@/hooks/useAuth";
 import { logout } from "@/lib/api/auth.functions";
+import { ROLE_LABELS } from "@/lib/rbac";
+import { usePermissions } from "@/hooks/usePermissions";
+import type { Session } from "@/lib/auth/types";
 import { cn } from "@/lib/utils";
 
-const groups = [
+const NAV_GROUPS = [
   {
     label: "Operations",
     items: [
@@ -61,22 +63,32 @@ const groups = [
   },
 ] as const;
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function permissionRoute(path: string): string {
+  if (path.startsWith("/dashboard/settings")) return "/dashboard/settings";
+  return path;
+}
+
+function SidebarContent({ session, onNavigate }: { session: Session; onNavigate?: () => void }) {
   const hotel = useHotelStore((s) => s.selectedHotel);
-  const { user } = useAuth();
+  const { canRoute } = usePermissions(session.user.role);
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const isActive = (to: string, exact?: boolean) =>
     exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
 
-  const initials = user.name.split(" ").map((n) => n[0]).join("");
+  const initials = session.user.name.split(" ").map((n) => n[0]).join("");
 
   const handleLogout = async () => {
     await logout();
     onNavigate?.();
     router.navigate({ to: "/login" });
   };
+
+  const visibleGroups = NAV_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((item) => canRoute(permissionRoute(item.to))),
+  })).filter((g) => g.items.length > 0);
 
   return (
     <>
@@ -96,7 +108,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {groups.map((g) => (
+        {visibleGroups.map((g) => (
           <div key={g.label} className="mb-5">
             <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {g.label}
@@ -134,14 +146,20 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
 
+      <div className="px-3 py-2">
+        <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+          {ROLE_LABELS[session.user.role]}
+        </span>
+      </div>
+
       <div className="border-t p-3">
         <div className="flex items-center gap-3 rounded-md p-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold">
             {initials}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold">{user.name}</div>
-            <div className="text-[11px] text-muted-foreground">{user.role.replace("_", " ")}</div>
+            <div className="truncate text-sm font-semibold">{session.user.name}</div>
+            <div className="text-[11px] text-muted-foreground">{ROLE_LABELS[session.user.role]}</div>
           </div>
           <button
             type="button"
@@ -157,18 +175,18 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function DashboardSidebar() {
+export function DashboardSidebar({ session }: { session: Session }) {
   const { open, setOpen } = useSidebarOpen();
 
   return (
     <>
-      <aside className="hidden h-screen w-64 flex-col border-r bg-card md:flex">
-        <SidebarContent />
+      <aside className="hidden h-full w-64 shrink-0 flex-col border-r bg-card md:flex">
+        <SidebarContent session={session} />
       </aside>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="left" className="flex w-64 flex-col p-0">
-          <SidebarContent onNavigate={() => setOpen(false)} />
+          <SidebarContent session={session} onNavigate={() => setOpen(false)} />
         </SheetContent>
       </Sheet>
     </>

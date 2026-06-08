@@ -1,24 +1,38 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
 import { ReservationForm } from "@/components/reservations/ReservationForm";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { listReservations } from "@/lib/api/reservations.functions";
+import { getCurrentSession } from "@/lib/api/auth.functions";
+import { canAccess } from "@/lib/rbac";
 import { useReservations } from "@/hooks/useReservations";
 import { useSortableTable } from "@/hooks/useSortableTable";
 import { useHotelStore } from "@/store/hotelStore";
-import { RES_STATUS_COLORS, ROOM_TYPE_NAMES } from "@/lib/mock-data";
+import { RES_STATUS_COLORS, ROOM_TYPE_NAMES, MOCK_RESERVATIONS } from "@/lib/mock-data";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { ReservationSource, ReservationStatus } from "@/lib/types";
 
 export const Route = createFileRoute("/dashboard/reservations")({
+  beforeLoad: async () => {
+    const session = await getCurrentSession();
+    if (!session) throw redirect({ to: "/login" });
+    if (!canAccess(session.user.role, "/dashboard/reservations")) {
+      throw redirect({ to: "/dashboard" });
+    }
+    return { session };
+  },
   loader: async () => {
     const hotel = useHotelStore.getState().selectedHotel;
-    const result = await listReservations({
-      data: { hotelId: hotel.id, page: 0, pageSize: 200 },
-    });
-    return { reservations: result.reservations };
+    try {
+      const result = await listReservations({
+        data: { hotelId: hotel.id, page: 0, pageSize: 200 },
+      });
+      return { reservations: result.reservations };
+    } catch {
+      return { reservations: MOCK_RESERVATIONS };
+    }
   },
   component: ReservationsPage,
 });

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireSessionUser } from "@/lib/auth/session.server";
+import { requireAction } from "@/lib/auth/session.server";
 import { nightsBetween } from "@/lib/format";
 import {
   assertValidTransition,
@@ -219,7 +219,7 @@ export const getReservation = createServerFn({ method: "GET" })
 export const createReservation = createServerFn({ method: "POST" })
   .inputValidator(createReservationSchema)
   .handler(async ({ data }) => {
-    await requireSessionUser();
+    await requireAction("createReservation");
 
     if (new Date(data.checkOut) <= new Date(data.checkIn)) {
       throw new Error("Check-out must be after check-in");
@@ -283,7 +283,7 @@ export const updateReservationStatus = createServerFn({ method: "POST" })
     const current = await prisma.reservation.findUniqueOrThrow({ where: { id: data.id } });
     assertValidTransition(current.status as ReservationStatus, data.status);
 
-    const actor = await requireSessionUser();
+    const actor = await requireAction("updateReservationStatus");
 
     const updated = await prisma.$transaction(async (tx) => {
       const reservation = await tx.reservation.update({
@@ -315,7 +315,7 @@ export const cancelReservation = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const current = await prisma.reservation.findUniqueOrThrow({ where: { id: data.id } });
     assertValidTransition(current.status as ReservationStatus, "CANCELLED");
-    const actor = await requireSessionUser();
+    const actor = await requireAction("cancelReservation");
 
     const updated = await prisma.$transaction(async (tx) => {
       const reservation = await tx.reservation.update({

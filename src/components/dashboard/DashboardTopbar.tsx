@@ -3,7 +3,7 @@ import { Bell, Search, ChevronDown, Menu } from "lucide-react";
 import { HOTEL_LIST } from "@/lib/config/hotels";
 import { useHotelStore } from "@/store/hotelStore";
 import { useSidebarOpen } from "@/store/sidebarStore";
-import { useAuth } from "@/hooks/useAuth";
+import type { Session } from "@/lib/auth/types";
 
 const TITLES: Record<string, string> = {
   "/dashboard": "Overview",
@@ -23,10 +23,10 @@ const TITLES: Record<string, string> = {
   "/dashboard/profile": "My Profile",
 };
 
-export function DashboardTopbar() {
+export function DashboardTopbar({ session }: { session: Session }) {
   const { selectedHotel, setSelectedHotel } = useHotelStore();
   const { setOpen } = useSidebarOpen();
-  const { user } = useAuth();
+  const { user } = session;
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const title =
     TITLES[pathname] ??

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireSessionUser } from "@/lib/auth/session.server";
+import { requireAction } from "@/lib/auth/session.server";
 import { formatCurrency } from "@/lib/format";
 import type { Folio, FolioItemCategory, FolioStatus } from "@/lib/types";
 
@@ -113,7 +113,7 @@ export const getFoliosForHotel = createServerFn({ method: "GET" })
 export const addFolioCharge = createServerFn({ method: "POST" })
   .inputValidator(addChargeSchema)
   .handler(async ({ data }) => {
-    await requireSessionUser();
+    await requireAction("addFolioCharge");
 
     const folio = await prisma.folio.findUniqueOrThrow({ where: { id: data.folioId } });
     if (folio.status !== "OPEN") {
@@ -136,7 +136,7 @@ export const addFolioCharge = createServerFn({ method: "POST" })
 export const recordPayment = createServerFn({ method: "POST" })
   .inputValidator(recordPaymentSchema)
   .handler(async ({ data }) => {
-    await requireSessionUser();
+    await requireAction("recordPayment");
 
     const folio = await prisma.folio.findUniqueOrThrow({ where: { id: data.folioId } });
     if (folio.status !== "OPEN") {
@@ -184,7 +184,7 @@ export const voidFolioItem = createServerFn({ method: "POST" })
       throw new Error("Cannot void items on a closed folio");
     }
 
-    const actor = await requireSessionUser();
+    const actor = await requireAction("voidFolioItem");
     await prisma.folioItem.delete({ where: { id: data.itemId } });
     const newTotal = await recalculateFolioTotal(data.folioId);
 
@@ -205,7 +205,7 @@ export const voidFolioItem = createServerFn({ method: "POST" })
 export const closeFolio = createServerFn({ method: "POST" })
   .inputValidator(closeFolioSchema)
   .handler(async ({ data }) => {
-    await requireSessionUser();
+    await requireAction("closeFolio");
 
     const folio = await prisma.folio.findUniqueOrThrow({ where: { id: data.folioId } });
     if (folio.paidAmount < folio.totalAmount - 0.01) {

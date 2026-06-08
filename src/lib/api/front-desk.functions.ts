@@ -1,9 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireSessionUser } from "@/lib/auth/session.server";
+import { requireAction } from "@/lib/auth/session.server";
 import { getTodayArrivals, getTodayDepartures } from "@/lib/api/reservations.queries";
 import { nightsBetween } from "@/lib/format";
+import { earnPointsForStay } from "@/lib/loyalty";
 import type {
   HousekeepingTaskStatus,
   Reservation,
@@ -102,7 +103,7 @@ export const checkIn = createServerFn({ method: "POST" })
       throw new Error("Cannot check in: reservation is not confirmed");
     }
 
-    const actor = await requireSessionUser();
+    const actor = await requireAction("updateReservationStatus");
 
     await prisma.$transaction([
       prisma.reservation.update({
@@ -146,7 +147,7 @@ export const checkOut = createServerFn({ method: "POST" })
       );
     }
 
-    const actor = await requireSessionUser();
+    const actor = await requireAction("updateReservationStatus");
 
     await prisma.$transaction([
       prisma.reservation.update({
@@ -180,13 +181,39 @@ export const checkOut = createServerFn({ method: "POST" })
       }),
     ]);
 
+    try {
+      const nights = nightsBetween(
+        reservation.checkIn.toISOString().slice(0, 10),
+        reservation.checkOut.toISOString().slice(0, 10),
+      );
+      const earned = earnPointsForStay(nights, reservation.totalAmount);
+      await prisma.$transaction([
+        prisma.guest.update({
+          where: { id: reservation.guestId },
+          data: { loyaltyPoints: { increment: earned } },
+        }),
+        prisma.auditLog.create({
+          data: {
+            hotelId: data.hotelId,
+            userId: actor.userId,
+            action: "LOYALTY_ADJUST",
+            entity: "LoyaltyPoints",
+            entityId: reservation.guestId,
+            after: { earned, reason: `Stay reward — reservation ${data.reservationId}` },
+          },
+        }),
+      ]);
+    } catch (err) {
+      console.warn("[front-desk] Failed to award loyalty points:", err);
+    }
+
     return { success: true as const };
   });
 
 export const updateRoomStatus = createServerFn({ method: "POST" })
   .inputValidator(updateRoomStatusSchema)
   .handler(async ({ data }) => {
-    const actor = await requireSessionUser();
+    const actor = await requireAction("updateRoomStatus");
 
     await prisma.$transaction([
       prisma.room.update({
@@ -210,7 +237,7 @@ export const updateRoomStatus = createServerFn({ method: "POST" })
 export const advanceHousekeepingTask = createServerFn({ method: "POST" })
   .inputValidator(advanceTaskSchema)
   .handler(async ({ data }) => {
-    await requireSessionUser();
+    await requireAction("advanceHousekeepingTask");
 
     const dbTask = await prisma.housekeepingTask.findUniqueOrThrow({
       where: { id: data.taskId },
@@ -240,7 +267,7 @@ export const advanceHousekeepingTask = createServerFn({ method: "POST" })
 export const assignHousekeepingTask = createServerFn({ method: "POST" })
   .inputValidator(assignTaskSchema)
   .handler(async ({ data }) => {
-    await requireSessionUser();
+    await requireAction("assignHousekeepingTask");
 
     await prisma.housekeepingTask.update({
       where: { id: data.taskId },

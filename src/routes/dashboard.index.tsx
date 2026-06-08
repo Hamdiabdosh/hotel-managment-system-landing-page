@@ -21,13 +21,43 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
 import { getDashboardHomeData } from "@/lib/api/dashboard.functions";
 import { useHotelStore } from "@/store/hotelStore";
-import { OCCUPANCY_7D, RES_STATUS_COLORS, REVENUE_BY_TYPE, ROOM_STATUS_COLORS } from "@/lib/mock-data";
+import { MOCK_RESERVATIONS, MOCK_ROOMS, OCCUPANCY_7D, RES_STATUS_COLORS, REVENUE_BY_TYPE, ROOM_STATUS_COLORS } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/format";
 
 export const Route = createFileRoute("/dashboard/")({
   loader: async () => {
     const hotel = useHotelStore.getState().selectedHotel;
-    return getDashboardHomeData({ data: { hotelId: hotel.id } });
+    try {
+      return await getDashboardHomeData({ data: { hotelId: hotel.id } });
+    } catch {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const occupiedCount = MOCK_ROOMS.filter((r) => r.status === "OCCUPIED").length;
+      const occupancyPct = Math.round((occupiedCount / MOCK_ROOMS.length) * 100);
+      const arrivalsToday = MOCK_RESERVATIONS.filter(
+        (r) => (r.status === "CONFIRMED" || r.status === "PENDING") && r.checkIn === todayStr,
+      );
+      const departuresToday = MOCK_RESERVATIONS.filter(
+        (r) => r.status === "CHECKED_IN" && r.checkOut === todayStr,
+      );
+      const revenueToday = MOCK_RESERVATIONS.filter(
+        (r) => r.status === "CHECKED_IN" && r.checkIn === todayStr,
+      ).reduce((sum, r) => sum + r.totalAmount, 0);
+
+      return {
+        kpis: {
+          occupancyPct,
+          arrivalsCount: arrivalsToday.length,
+          departuresCount: departuresToday.length,
+          revenueToday,
+        },
+        arrivals: arrivalsToday.slice(0, 5),
+        housekeepingSnapshot: MOCK_ROOMS.filter((r) =>
+          ["CLEANING", "INSPECTING", "MAINTENANCE"].includes(r.status),
+        ).slice(0, 5),
+        occupancy7d: OCCUPANCY_7D,
+        revenueByType: REVENUE_BY_TYPE,
+      };
+    }
   },
   component: DashboardHome,
 });

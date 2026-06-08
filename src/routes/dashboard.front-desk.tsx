@@ -1,18 +1,32 @@
-import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { Plus, LogIn, LogOut, FileText, MessageSquare } from "lucide-react";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
 import { ReservationForm } from "@/components/reservations/ReservationForm";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { checkIn, checkOut, getFrontDeskData } from "@/lib/api/front-desk.functions";
+import { getCurrentSession } from "@/lib/api/auth.functions";
+import { canAccess } from "@/lib/rbac";
 import { useHotelStore } from "@/store/hotelStore";
 import { formatCurrency } from "@/lib/format";
 import type { HotelConfig, Reservation } from "@/lib/types";
 
 export const Route = createFileRoute("/dashboard/front-desk")({
+  beforeLoad: async () => {
+    const session = await getCurrentSession();
+    if (!session) throw redirect({ to: "/login" });
+    if (!canAccess(session.user.role, "/dashboard/front-desk")) {
+      throw redirect({ to: "/dashboard" });
+    }
+    return { session };
+  },
   loader: async () => {
     const hotel = useHotelStore.getState().selectedHotel;
-    return getFrontDeskData({ data: { hotelId: hotel.id } });
+    try {
+      return await getFrontDeskData({ data: { hotelId: hotel.id } });
+    } catch {
+      return { arrivals: [], departures: [] };
+    }
   },
   component: FrontDeskPage,
 });

@@ -6,9 +6,19 @@ interface Props {
   guest: Guest;
   stayHistory: Reservation[];
   currency: string;
+  showPreferences?: boolean;
+  showStayHistory?: boolean;
+  tierClassName?: string;
 }
 
-export function GuestProfileCard({ guest, stayHistory, currency }: Props) {
+export function GuestProfileCard({
+  guest,
+  stayHistory,
+  currency,
+  showPreferences = true,
+  showStayHistory = true,
+  tierClassName,
+}: Props) {
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border bg-card p-6 shadow-sm">
@@ -23,7 +33,9 @@ export function GuestProfileCard({ guest, stayHistory, currency }: Props) {
             <h2 className="font-serif text-2xl font-bold">{guest.firstName} {guest.lastName}</h2>
             <p className="text-sm text-muted-foreground">{guest.email} · {guest.phone}</p>
             <div className="mt-2 flex gap-2">
-              <span className="rounded-full border bg-muted px-2 py-0.5 text-xs font-medium">{guest.loyaltyTier}</span>
+              <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${tierClassName ?? "bg-muted"}`}>
+                {guest.loyaltyTier ?? "Bronze"}
+              </span>
               <span className="rounded-full border bg-muted px-2 py-0.5 text-xs font-medium">{guest.loyaltyPoints} pts</span>
             </div>
           </div>
@@ -37,7 +49,7 @@ export function GuestProfileCard({ guest, stayHistory, currency }: Props) {
         </dl>
       </div>
 
-      {guest.preferences && (
+      {showPreferences && guest.preferences && (
         <div className="rounded-2xl border bg-card p-6 shadow-sm">
           <h3 className="font-serif text-lg font-semibold">Preferences</h3>
           <dl className="mt-4 grid grid-cols-3 gap-4 text-sm">
@@ -48,6 +60,7 @@ export function GuestProfileCard({ guest, stayHistory, currency }: Props) {
         </div>
       )}
 
+      {showStayHistory && (
       <div className="rounded-2xl border bg-card shadow-sm">
         <div className="border-b px-6 py-4">
           <h3 className="font-serif text-lg font-semibold">Stay History</h3>
@@ -74,6 +87,7 @@ export function GuestProfileCard({ guest, stayHistory, currency }: Props) {
           )}
         </ul>
       </div>
+      )}
 
       {guest.notes && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">

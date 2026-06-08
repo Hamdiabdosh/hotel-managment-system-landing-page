@@ -1,4 +1,4 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
@@ -11,7 +11,11 @@ import {
   recordPayment,
   voidFolioItem,
 } from "@/lib/api/billing.functions";
+import { getCurrentSession } from "@/lib/api/auth.functions";
+import { canAccess } from "@/lib/rbac";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useHotelStore } from "@/store/hotelStore";
+import { MOCK_FOLIOS } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/format";
 import type { Folio, FolioItem, FolioItemCategory } from "@/lib/types";
 
@@ -36,10 +40,22 @@ const CHARGE_CATEGORIES: FolioItemCategory[] = [
 
 export const Route = createFileRoute("/dashboard/billing")({
   validateSearch: searchSchema,
+  beforeLoad: async () => {
+    const session = await getCurrentSession();
+    if (!session) throw redirect({ to: "/login" });
+    if (!canAccess(session.user.role, "/dashboard/billing")) {
+      throw redirect({ to: "/dashboard" });
+    }
+    return { session };
+  },
   loader: async () => {
     const hotel = useHotelStore.getState().selectedHotel;
-    const folios = await getFoliosForHotel({ data: { hotelId: hotel.id, status: "ALL" } });
-    return { folios };
+    try {
+      const folios = await getFoliosForHotel({ data: { hotelId: hotel.id, status: "ALL" } });
+      return { folios };
+    } catch {
+      return { folios: MOCK_FOLIOS };
+    }
   },
   component: BillingPage,
 });
@@ -48,6 +64,8 @@ function BillingPage() {
   const hotel = useHotelStore((s) => s.selectedHotel);
   const { folioId } = Route.useSearch();
   const { folios } = Route.useLoaderData();
+  const { session } = Route.useRouteContext();
+  const { can } = usePermissions(session.user.role);
   const router = useRouter();
 
   const openFolios = folios.filter((f) => f.status === "OPEN");
@@ -231,10 +249,10 @@ function BillingPage() {
               <FolioView
                 folio={selected}
                 currency={hotel.currency}
-                onAddCharge={() => setAddChargeOpen(true)}
-                onRecordPayment={() => setPaymentOpen(true)}
-                onVoidItem={handleVoidItem}
-                onClose={handleCloseFolio}
+                onAddCharge={can("addFolioCharge") ? () => setAddChargeOpen(true) : undefined}
+                onRecordPayment={can("recordPayment") ? () => setPaymentOpen(true) : undefined}
+                onVoidItem={can("voidFolioItem") ? handleVoidItem : undefined}
+                onClose={can("closeFolio") ? handleCloseFolio : undefined}
               />
             </div>
           ) : (

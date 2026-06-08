@@ -127,6 +127,7 @@ model User {
   hashedPassword String
   role           Role
   name           String
+  active         Boolean  @default(true)
   createdAt      DateTime @default(now())
 
   hotel                    Hotel              @relation(fields: [hotelId], references: [id])

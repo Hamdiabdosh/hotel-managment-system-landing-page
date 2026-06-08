@@ -1,16 +1,26 @@
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/auth/password.server";
+import type { StaffRole } from "../src/lib/types";
 import {
   MOCK_ROOMS,
   MOCK_GUESTS,
   MOCK_RESERVATIONS,
   MOCK_FOLIOS,
-  MOCK_STAFF,
   MOCK_HOUSEKEEPING,
   MOCK_MAINTENANCE,
 } from "../src/lib/mock-data";
 
 const prisma = new PrismaClient();
+
+const SEED_STAFF: { id: string; name: string; email: string; role: StaffRole }[] = [
+  { id: "staff_1", name: "Alex Morgan", email: "alex@grandpalace.com", role: "HOTEL_ADMIN" },
+  { id: "staff_2", name: "Jamie Rivera", email: "frontdesk@grandpalace.com", role: "FRONT_DESK" },
+  { id: "staff_3", name: "Sam Chen", email: "housekeeping@grandpalace.com", role: "HOUSEKEEPING" },
+  { id: "staff_4", name: "Jordan Lee", email: "maintenance@grandpalace.com", role: "MAINTENANCE" },
+  { id: "staff_5", name: "Taylor Brooks", email: "accounting@grandpalace.com", role: "ACCOUNTANT" },
+  { id: "staff_6", name: "Casey Kim", email: "pos@grandpalace.com", role: "POS_STAFF" },
+  { id: "staff_7", name: "System Admin", email: "admin@atrium.app", role: "SUPER_ADMIN" },
+];
 
 async function main() {
   console.log("Seeding...");
@@ -38,10 +48,15 @@ async function main() {
     },
   });
 
-  for (const s of MOCK_STAFF) {
+  for (const s of SEED_STAFF) {
     await prisma.user.upsert({
       where: { id: s.id },
-      update: {},
+      update: {
+        email: s.email,
+        role: s.role,
+        name: s.name,
+        active: true,
+      },
       create: {
         id: s.id,
         hotelId: grandPalace.id,
@@ -49,6 +64,7 @@ async function main() {
         hashedPassword: defaultPassword,
         role: s.role,
         name: s.name,
+        active: true,
       },
     });
   }
@@ -161,7 +177,8 @@ async function main() {
   }
 
   for (const t of MOCK_HOUSEKEEPING) {
-    const staff = MOCK_STAFF.find((s) => s.name === t.assignedTo);
+    const hkStaff = SEED_STAFF.filter((s) => s.role === "HOUSEKEEPING");
+    const staff = hkStaff[MOCK_HOUSEKEEPING.indexOf(t) % hkStaff.length];
     await prisma.housekeepingTask.upsert({
       where: { id: t.id },
       update: {},
@@ -179,8 +196,10 @@ async function main() {
   }
 
   for (const m of MOCK_MAINTENANCE) {
-    const assignee = MOCK_STAFF.find((s) => s.name === m.assignedTo);
-    const reporter = MOCK_STAFF.find((s) => s.name === m.reportedBy);
+    const assignee = m.assignedTo
+      ? SEED_STAFF.find((s) => s.role === "MAINTENANCE")
+      : null;
+    const reporter = SEED_STAFF.find((s) => s.role === "FRONT_DESK") ?? SEED_STAFF[0]!;
     if (!reporter) continue;
     await prisma.maintenanceOrder.upsert({
       where: { id: m.id },
