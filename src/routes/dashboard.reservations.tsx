@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { listReservations } from "@/lib/api/reservations.functions";
 import { getCurrentSession } from "@/lib/api/auth.functions";
 import { canAccess } from "@/lib/rbac";
-import { useReservations } from "@/hooks/useReservations";
+import { useReservations, DEFAULT_FILTERS } from "@/hooks/useReservations";
 import { useSortableTable } from "@/hooks/useSortableTable";
 import { useHotelStore } from "@/store/hotelStore";
 import { RES_STATUS_COLORS, ROOM_TYPE_NAMES, MOCK_RESERVATIONS } from "@/lib/mock-data";
@@ -30,18 +30,34 @@ export const Route = createFileRoute("/dashboard/reservations")({
         data: { hotelId: hotel.id, page: 0, pageSize: 200 },
       });
       return { reservations: result.reservations };
-    } catch {
-      return { reservations: MOCK_RESERVATIONS };
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[dev] DB unavailable, falling back to mock data:", error);
+        return { reservations: MOCK_RESERVATIONS };
+      }
+      throw error;
     }
   },
   component: ReservationsPage,
 });
 
 const STATUS_FILTERS: (ReservationStatus | "ALL")[] = [
-  "ALL", "PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW",
+  "ALL",
+  "PENDING",
+  "CONFIRMED",
+  "CHECKED_IN",
+  "CHECKED_OUT",
+  "CANCELLED",
+  "NO_SHOW",
 ];
 const SOURCE_FILTERS: (ReservationSource | "ALL")[] = [
-  "ALL", "DIRECT", "BOOKING_COM", "AIRBNB", "EXPEDIA", "PHONE", "WALKIN",
+  "ALL",
+  "DIRECT",
+  "BOOKING_COM",
+  "AIRBNB",
+  "EXPEDIA",
+  "PHONE",
+  "WALKIN",
 ];
 const PAGE_SIZE = 10;
 
@@ -63,7 +79,10 @@ function ReservationsPage() {
     "checkIn",
   );
 
-  const paged = useMemo(() => sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [sorted, page]);
+  const paged = useMemo(
+    () => sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [sorted, page],
+  );
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
 
   const SortTh = ({ k, label }: { k: string; label: string }) => (
@@ -80,37 +99,87 @@ function ReservationsPage() {
             <Search className="h-4 w-4 text-muted-foreground" />
             <input
               value={filters.query}
-              onChange={(e) => { setFilters({ ...filters, query: e.target.value }); setPage(0); }}
+              onChange={(e) => {
+                setFilters({ ...filters, query: e.target.value });
+                setPage(0);
+              }}
               placeholder="Search by guest or booking code"
               className="w-full bg-transparent text-sm outline-none"
             />
           </div>
           <select
             value={filters.status}
-            onChange={(e) => { setFilters({ ...filters, status: e.target.value as ReservationStatus | "ALL" }); setPage(0); }}
+            onChange={(e) => {
+              setFilters({ ...filters, status: e.target.value as ReservationStatus | "ALL" });
+              setPage(0);
+            }}
             className="rounded-md border bg-card px-3 py-2 text-sm"
           >
             {STATUS_FILTERS.map((s) => (
-              <option key={s} value={s}>{s === "ALL" ? "All statuses" : s.replace("_", " ")}</option>
+              <option key={s} value={s}>
+                {s === "ALL" ? "All statuses" : s.replace("_", " ")}
+              </option>
             ))}
           </select>
           <select
             value={filters.source}
-            onChange={(e) => { setFilters({ ...filters, source: e.target.value as ReservationSource | "ALL" }); setPage(0); }}
+            onChange={(e) => {
+              setFilters({ ...filters, source: e.target.value as ReservationSource | "ALL" });
+              setPage(0);
+            }}
             className="rounded-md border bg-card px-3 py-2 text-sm"
           >
             {SOURCE_FILTERS.map((s) => (
-              <option key={s} value={s}>{s === "ALL" ? "All sources" : s.replace("_", " ")}</option>
+              <option key={s} value={s}>
+                {s === "ALL" ? "All sources" : s.replace("_", " ")}
+              </option>
             ))}
           </select>
           <select
             value={filters.roomType}
-            onChange={(e) => { setFilters({ ...filters, roomType: e.target.value }); setPage(0); }}
+            onChange={(e) => {
+              setFilters({ ...filters, roomType: e.target.value });
+              setPage(0);
+            }}
             className="rounded-md border bg-card px-3 py-2 text-sm"
           >
             <option value="ALL">All room types</option>
-            {ROOM_TYPE_NAMES.map((t) => <option key={t} value={t}>{t}</option>)}
+            {ROOM_TYPE_NAMES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
           </select>
+          <input
+            type="date"
+            value={filters.dateFrom}
+            onChange={(e) => {
+              setFilters({ ...filters, dateFrom: e.target.value });
+              setPage(0);
+            }}
+            className="rounded-md border bg-card px-3 py-2 text-sm"
+            title="Check-in from"
+          />
+          <input
+            type="date"
+            value={filters.dateTo}
+            onChange={(e) => {
+              setFilters({ ...filters, dateTo: e.target.value });
+              setPage(0);
+            }}
+            className="rounded-md border bg-card px-3 py-2 text-sm"
+            title="Check-out to"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setFilters(DEFAULT_FILTERS);
+              setPage(0);
+            }}
+            className="rounded-md border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Clear filters
+          </button>
           <button
             onClick={() => setFormOpen(true)}
             className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold"
@@ -134,6 +203,7 @@ function ReservationsPage() {
                   <th className="px-4 py-3">Source</th>
                   <th className="px-4 py-3">Status</th>
                   <SortTh k="amount" label="Amount" />
+                  <th className="px-4 py-3">Balance</th>
                   <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
@@ -150,14 +220,29 @@ function ReservationsPage() {
                     <td className="px-4 py-3">{formatDate(r.checkOut)}</td>
                     <td className="px-4 py-3">{r.nights}</td>
                     <td className="px-4 py-3">
-                      <span className="rounded-full border bg-muted px-2 py-0.5 text-[11px]">{r.source.replace("_", " ")}</span>
+                      <span className="rounded-full border bg-muted px-2 py-0.5 text-[11px]">
+                        {r.source.replace("_", " ")}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${RES_STATUS_COLORS[r.status]}`}>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${RES_STATUS_COLORS[r.status]}`}
+                      >
                         {r.status.replace("_", " ")}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold">{formatCurrency(r.totalAmount, hotel.currency)}</td>
+                    <td className="px-4 py-3 text-right font-semibold">
+                      {formatCurrency(r.totalAmount, hotel.currency)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {r.folioBalance && r.folioBalance > 0 ? (
+                        <span className="font-semibold text-rose-600">
+                          {formatCurrency(r.folioBalance, hotel.currency)}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <Link
                         to="/dashboard/reservations/$id"
@@ -172,9 +257,13 @@ function ReservationsPage() {
                 ))}
                 {paged.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-4 py-16 text-center text-muted-foreground">
+                    <td colSpan={11} className="px-4 py-16 text-center text-muted-foreground">
                       No reservations match your filters.
-                      <button onClick={() => setFormOpen(true)} className="mt-2 block w-full text-sm font-semibold hover:underline" style={{ color: "var(--hotel-primary)" }}>
+                      <button
+                        onClick={() => setFormOpen(true)}
+                        className="mt-2 block w-full text-sm font-semibold hover:underline"
+                        style={{ color: "var(--hotel-primary)" }}
+                      >
                         Create first reservation
                       </button>
                     </td>
@@ -186,11 +275,24 @@ function ReservationsPage() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between border-t px-4 py-3 text-sm">
               <span className="text-muted-foreground">
-                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sorted.length)} of {sorted.length}
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sorted.length)} of{" "}
+                {sorted.length}
               </span>
               <div className="flex gap-1">
-                <button disabled={page === 0} onClick={() => setPage((p) => p - 1)} className="rounded border p-1 disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
-                <button disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)} className="rounded border p-1 disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+                <button
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => p - 1)}
+                  className="rounded border p-1 disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  disabled={page >= totalPages - 1}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="rounded border p-1 disabled:opacity-40"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
               </div>
             </div>
           )}

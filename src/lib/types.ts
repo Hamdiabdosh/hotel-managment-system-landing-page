@@ -227,6 +227,8 @@ export interface Reservation {
   source: ReservationSource;
   totalAmount: number;
   specialRequests?: string;
+  folioBalance?: number;
+  folioStatus?: FolioStatus | null;
 }
 
 export type LoyaltyTier = "Bronze" | "Silver" | "Gold" | "Platinum";

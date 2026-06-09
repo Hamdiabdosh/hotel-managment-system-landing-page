@@ -29,34 +29,38 @@ export const Route = createFileRoute("/dashboard/")({
     const hotel = useHotelStore.getState().selectedHotel;
     try {
       return await getDashboardHomeData({ data: { hotelId: hotel.id } });
-    } catch {
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const occupiedCount = MOCK_ROOMS.filter((r) => r.status === "OCCUPIED").length;
-      const occupancyPct = Math.round((occupiedCount / MOCK_ROOMS.length) * 100);
-      const arrivalsToday = MOCK_RESERVATIONS.filter(
-        (r) => (r.status === "CONFIRMED" || r.status === "PENDING") && r.checkIn === todayStr,
-      );
-      const departuresToday = MOCK_RESERVATIONS.filter(
-        (r) => r.status === "CHECKED_IN" && r.checkOut === todayStr,
-      );
-      const revenueToday = MOCK_RESERVATIONS.filter(
-        (r) => r.status === "CHECKED_IN" && r.checkIn === todayStr,
-      ).reduce((sum, r) => sum + r.totalAmount, 0);
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[dev] DB unavailable, falling back to mock data:", error);
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const occupiedCount = MOCK_ROOMS.filter((r) => r.status === "OCCUPIED").length;
+        const occupancyPct = Math.round((occupiedCount / MOCK_ROOMS.length) * 100);
+        const arrivalsToday = MOCK_RESERVATIONS.filter(
+          (r) => (r.status === "CONFIRMED" || r.status === "PENDING") && r.checkIn === todayStr,
+        );
+        const departuresToday = MOCK_RESERVATIONS.filter(
+          (r) => r.status === "CHECKED_IN" && r.checkOut === todayStr,
+        );
+        const revenueToday = MOCK_RESERVATIONS.filter(
+          (r) => r.status === "CHECKED_IN" && r.checkIn === todayStr,
+        ).reduce((sum, r) => sum + r.totalAmount, 0);
 
-      return {
-        kpis: {
-          occupancyPct,
-          arrivalsCount: arrivalsToday.length,
-          departuresCount: departuresToday.length,
-          revenueToday,
-        },
-        arrivals: arrivalsToday.slice(0, 5),
-        housekeepingSnapshot: MOCK_ROOMS.filter((r) =>
-          ["CLEANING", "INSPECTING", "MAINTENANCE"].includes(r.status),
-        ).slice(0, 5),
-        occupancy7d: OCCUPANCY_7D,
-        revenueByType: REVENUE_BY_TYPE,
-      };
+        return {
+          kpis: {
+            occupancyPct,
+            arrivalsCount: arrivalsToday.length,
+            departuresCount: departuresToday.length,
+            revenueToday,
+          },
+          arrivals: arrivalsToday.slice(0, 5),
+          housekeepingSnapshot: MOCK_ROOMS.filter((r) =>
+            ["CLEANING", "INSPECTING", "MAINTENANCE"].includes(r.status),
+          ).slice(0, 5),
+          occupancy7d: OCCUPANCY_7D,
+          revenueByType: REVENUE_BY_TYPE,
+        };
+      }
+      throw error;
     }
   },
   component: DashboardHome,

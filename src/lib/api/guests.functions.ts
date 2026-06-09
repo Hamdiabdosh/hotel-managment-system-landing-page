@@ -36,7 +36,10 @@ const createGuestSchema = z.object({
   nationality: z.string().min(1),
   idType: z.string().optional(),
   idNumber: z.string().optional(),
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   preferences: z.record(z.string()).optional(),
 });
 
@@ -49,7 +52,10 @@ const updatePreferencesSchema = z.object({
 const adjustLoyaltySchema = z.object({
   id: z.string(),
   hotelId: z.string(),
-  delta: z.number().int().refine((n) => n !== 0, "Delta cannot be zero"),
+  delta: z
+    .number()
+    .int()
+    .refine((n) => n !== 0, "Delta cannot be zero"),
   reason: z.string().min(1),
 });
 
@@ -150,7 +156,12 @@ function mapAuditLogToLedgerEntry(log: {
   after: unknown;
   createdAt: Date;
 }): LoyaltyLedgerEntry | null {
-  const after = log.after as { points?: number; earned?: number; delta?: number; reason?: string } | null;
+  const after = log.after as {
+    points?: number;
+    earned?: number;
+    delta?: number;
+    reason?: string;
+  } | null;
   if (!after) return null;
 
   const delta =
@@ -274,6 +285,25 @@ export const listGuests = createServerFn({ method: "GET" })
     }
   });
 
+export const searchGuests = createServerFn({ method: "GET" })
+  .inputValidator(z.object({ hotelId: z.string(), query: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    await requireSessionUser();
+    return prisma.guest.findMany({
+      where: {
+        hotelId: data.hotelId,
+        OR: [
+          { firstName: { contains: data.query, mode: "insensitive" } },
+          { lastName: { contains: data.query, mode: "insensitive" } },
+          { email: { contains: data.query, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true, firstName: true, lastName: true, email: true },
+      take: 10,
+      orderBy: { lastName: "asc" },
+    });
+  });
+
 export const getGuestDetail = createServerFn({ method: "GET" })
   .inputValidator(guestIdSchema)
   .handler(async ({ data }) => {
@@ -310,7 +340,9 @@ export const getGuestDetail = createServerFn({ method: "GET" })
       console.warn("[guests] DB unavailable, using mock data:", err);
       const guest = MOCK_GUESTS.find((g) => g.id === data.id);
       if (!guest) throw new Error("Guest not found");
-      const stays = MOCK_RESERVATIONS.filter((r) => r.guestId === guest.id).map(mapMockReservationToStay);
+      const stays = MOCK_RESERVATIONS.filter((r) => r.guestId === guest.id).map(
+        mapMockReservationToStay,
+      );
       return {
         ...guest,
         loyaltyTier: getTier(guest.loyaltyPoints),

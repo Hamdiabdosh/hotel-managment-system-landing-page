@@ -3,17 +3,9 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAction } from "@/lib/auth/session.server";
 import { nightsBetween } from "@/lib/format";
-import {
-  assertValidTransition,
-  isRoomAvailable,
-} from "@/lib/api/reservations.queries";
-import type {
-  Folio,
-  Guest,
-  Reservation,
-  ReservationSource,
-  ReservationStatus,
-} from "@/lib/types";
+import { sendReservationConfirmation } from "@/lib/email";
+import { assertValidTransition, isRoomAvailable } from "@/lib/api/reservations.queries";
+import type { Folio, Guest, Reservation, ReservationSource, ReservationStatus } from "@/lib/types";
 
 const reservationStatusSchema = z.enum([
   "PENDING",
@@ -71,6 +63,16 @@ const cancelReservationSchema = z.object({
   reason: z.string().optional(),
 });
 
+const updateReservationSchema = z.object({
+  id: z.string(),
+  checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  adults: z.number().int().min(1).max(10),
+  children: z.number().int().min(0).max(10),
+  specialRequests: z.string().optional(),
+  priceOverride: z.number().min(0).optional(),
+});
+
 function toReservationCode(id: string): string {
   return `BK-${id.slice(-5).toUpperCase()}`;
 }
@@ -89,9 +91,11 @@ function mapPrismaReservation(r: {
   specialRequests: string | null;
   guest: { firstName: string; lastName: string };
   room: { number: string; type: string };
+  folios?: { totalAmount: number; paidAmount: number }[];
 }): Reservation {
   const checkIn = r.checkIn.toISOString().slice(0, 10);
   const checkOut = r.checkOut.toISOString().slice(0, 10);
+  const folio = r.folios?.[0];
   return {
     id: r.id,
     code: toReservationCode(r.id),
@@ -109,6 +113,7 @@ function mapPrismaReservation(r: {
     source: r.source,
     totalAmount: r.totalAmount,
     specialRequests: r.specialRequests ?? undefined,
+    folioBalance: folio ? folio.totalAmount - folio.paidAmount : 0,
   };
 }
 
@@ -122,9 +127,7 @@ export const listReservations = createServerFn({ method: "GET" })
       hotelId: data.hotelId,
       ...(data.status ? { status: data.status } : {}),
       ...(data.source ? { source: data.source } : {}),
-      ...(data.roomType && data.roomType !== "ALL"
-        ? { room: { type: data.roomType } }
-        : {}),
+      ...(data.roomType && data.roomType !== "ALL" ? { room: { type: data.roomType } } : {}),
       ...(data.dateFrom ? { checkIn: { gte: new Date(data.dateFrom) } } : {}),
       ...(data.dateTo ? { checkOut: { lte: new Date(data.dateTo) } } : {}),
       ...(data.query
@@ -140,7 +143,11 @@ export const listReservations = createServerFn({ method: "GET" })
     const [rows, total] = await Promise.all([
       prisma.reservation.findMany({
         where,
-        include: { guest: true, room: true },
+        include: {
+          guest: true,
+          room: true,
+          folios: { select: { totalAmount: true, paidAmount: true }, take: 1 },
+        },
         skip: page * pageSize,
         take: pageSize,
         orderBy: { checkIn: "desc" },
@@ -213,7 +220,7 @@ export const getReservation = createServerFn({ method: "GET" })
       };
     }
 
-    return { reservation, guest, folio };
+    return { reservation, guest, folio, roomPricePerNight: row.room.pricePerNight };
   });
 
 export const createReservation = createServerFn({ method: "POST" })
@@ -274,7 +281,120 @@ export const createReservation = createServerFn({ method: "POST" })
       return reservation;
     });
 
+    try {
+      const [guest, hotelRecord] = await Promise.all([
+        prisma.guest.findUnique({ where: { id: data.guestId } }),
+        prisma.hotel.findUnique({
+          where: { id: data.hotelId },
+          select: { name: true, config: true },
+        }),
+      ]);
+      if (guest) {
+        const hotelConfig = hotelRecord?.config as { currency?: string } | null;
+        await sendReservationConfirmation({
+          to: guest.email,
+          guestName: `${guest.firstName} ${guest.lastName}`,
+          hotelName: hotelRecord?.name ?? "Hotel",
+          code: toReservationCode(created.id),
+          roomType: room.type,
+          roomNumber: room.number,
+          checkIn: data.checkIn,
+          checkOut: data.checkOut,
+          nights,
+          totalAmount,
+          currency: hotelConfig?.currency ?? "USD",
+        });
+      }
+    } catch (emailErr) {
+      console.warn("[reservations] Failed to send confirmation email:", emailErr);
+    }
+
     return mapPrismaReservation(created);
+  });
+
+export const updateReservation = createServerFn({ method: "POST" })
+  .inputValidator(updateReservationSchema)
+  .handler(async ({ data }) => {
+    const actor = await requireAction("updateReservationStatus");
+    const current = await prisma.reservation.findUniqueOrThrow({
+      where: { id: data.id },
+      include: { room: true },
+    });
+
+    if (["CHECKED_OUT", "CANCELLED", "NO_SHOW"].includes(current.status)) {
+      throw new Error("Cannot edit a completed or cancelled reservation");
+    }
+
+    if (new Date(data.checkOut) <= new Date(data.checkIn)) {
+      throw new Error("Check-out must be after check-in");
+    }
+
+    const datesChanged =
+      current.checkIn.toISOString().slice(0, 10) !== data.checkIn ||
+      current.checkOut.toISOString().slice(0, 10) !== data.checkOut;
+
+    if (datesChanged) {
+      const available = await isRoomAvailable(
+        current.roomId,
+        new Date(data.checkIn),
+        new Date(data.checkOut),
+        data.id,
+      );
+      if (!available) throw new Error("Room is not available for the new dates");
+    }
+
+    const nights = nightsBetween(data.checkIn, data.checkOut);
+    const newTotal = data.priceOverride ?? current.room.pricePerNight * nights;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.reservation.update({
+        where: { id: data.id },
+        data: {
+          checkIn: new Date(data.checkIn),
+          checkOut: new Date(data.checkOut),
+          adults: data.adults,
+          children: data.children,
+          specialRequests: data.specialRequests ?? null,
+          totalAmount: newTotal,
+        },
+      });
+      const folio = await tx.folio.findFirst({ where: { reservationId: data.id } });
+      if (folio) {
+        await tx.folio.update({
+          where: { id: folio.id },
+          data: { totalAmount: newTotal },
+        });
+        const roomItem = await tx.folioItem.findFirst({
+          where: { folioId: folio.id, category: "ROOM" },
+        });
+        if (roomItem) {
+          await tx.folioItem.update({
+            where: { id: roomItem.id },
+            data: {
+              description: `Room charge — ${nights} night${nights === 1 ? "" : "s"}`,
+              amount: newTotal,
+            },
+          });
+        }
+      }
+      await tx.auditLog.create({
+        data: {
+          hotelId: current.hotelId,
+          userId: actor.userId,
+          action: "RESERVATION_EDIT",
+          entity: "Reservation",
+          entityId: data.id,
+          before: {
+            checkIn: current.checkIn,
+            checkOut: current.checkOut,
+            totalAmount: current.totalAmount,
+          },
+          after: { checkIn: data.checkIn, checkOut: data.checkOut, totalAmount: newTotal },
+        },
+      });
+    });
+
+    return { success: true as const };
   });
 
 export const updateReservationStatus = createServerFn({ method: "POST" })

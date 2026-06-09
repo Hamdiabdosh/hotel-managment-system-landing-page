@@ -25,8 +25,12 @@ export const Route = createFileRoute("/dashboard/rooms")({
     const hotel = useHotelStore.getState().selectedHotel;
     try {
       return await listRoomsForHotel({ data: { hotelId: hotel.id } });
-    } catch {
-      return { rooms: MOCK_ROOMS, activeStays: [], housekeepingTasks: MOCK_HOUSEKEEPING };
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[dev] DB unavailable, falling back to mock data:", error);
+        return { rooms: MOCK_ROOMS, activeStays: [], housekeepingTasks: MOCK_HOUSEKEEPING };
+      }
+      throw error;
     }
   },
   component: RoomsPage,

@@ -34,6 +34,7 @@ import { Route as DashboardSettingsHotelRouteImport } from './routes/dashboard.s
 import { Route as DashboardReservationsIdRouteImport } from './routes/dashboard.reservations.$id'
 import { Route as DashboardGuestsIdRouteImport } from './routes/dashboard.guests.$id'
 import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
+import { Route as DashboardBillingInvoiceFolioIdRouteImport } from './routes/dashboard.billing.invoice.$folioId'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -160,6 +161,12 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardBillingInvoiceFolioIdRoute =
+  DashboardBillingInvoiceFolioIdRouteImport.update({
+    id: '/invoice/$folioId',
+    path: '/invoice/$folioId',
+    getParentRoute: () => DashboardBillingRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -168,7 +175,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/$hotel/book': typeof HotelBookRoute
   '/api/health': typeof ApiHealthRoute
-  '/dashboard/billing': typeof DashboardBillingRoute
+  '/dashboard/billing': typeof DashboardBillingRouteWithChildren
   '/dashboard/channel-manager': typeof DashboardChannelManagerRoute
   '/dashboard/front-desk': typeof DashboardFrontDeskRoute
   '/dashboard/guests': typeof DashboardGuestsRouteWithChildren
@@ -187,6 +194,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/guests/$id': typeof DashboardGuestsIdRoute
   '/dashboard/reservations/$id': typeof DashboardReservationsIdRoute
   '/dashboard/settings/hotel': typeof DashboardSettingsHotelRoute
+  '/dashboard/billing/invoice/$folioId': typeof DashboardBillingInvoiceFolioIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -194,7 +202,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/$hotel/book': typeof HotelBookRoute
   '/api/health': typeof ApiHealthRoute
-  '/dashboard/billing': typeof DashboardBillingRoute
+  '/dashboard/billing': typeof DashboardBillingRouteWithChildren
   '/dashboard/channel-manager': typeof DashboardChannelManagerRoute
   '/dashboard/front-desk': typeof DashboardFrontDeskRoute
   '/dashboard/guests': typeof DashboardGuestsRouteWithChildren
@@ -213,6 +221,7 @@ export interface FileRoutesByTo {
   '/dashboard/guests/$id': typeof DashboardGuestsIdRoute
   '/dashboard/reservations/$id': typeof DashboardReservationsIdRoute
   '/dashboard/settings/hotel': typeof DashboardSettingsHotelRoute
+  '/dashboard/billing/invoice/$folioId': typeof DashboardBillingInvoiceFolioIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -222,7 +231,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/$hotel/book': typeof HotelBookRoute
   '/api/health': typeof ApiHealthRoute
-  '/dashboard/billing': typeof DashboardBillingRoute
+  '/dashboard/billing': typeof DashboardBillingRouteWithChildren
   '/dashboard/channel-manager': typeof DashboardChannelManagerRoute
   '/dashboard/front-desk': typeof DashboardFrontDeskRoute
   '/dashboard/guests': typeof DashboardGuestsRouteWithChildren
@@ -241,6 +250,7 @@ export interface FileRoutesById {
   '/dashboard/guests/$id': typeof DashboardGuestsIdRoute
   '/dashboard/reservations/$id': typeof DashboardReservationsIdRoute
   '/dashboard/settings/hotel': typeof DashboardSettingsHotelRoute
+  '/dashboard/billing/invoice/$folioId': typeof DashboardBillingInvoiceFolioIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -270,6 +280,7 @@ export interface FileRouteTypes {
     | '/dashboard/guests/$id'
     | '/dashboard/reservations/$id'
     | '/dashboard/settings/hotel'
+    | '/dashboard/billing/invoice/$folioId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -296,6 +307,7 @@ export interface FileRouteTypes {
     | '/dashboard/guests/$id'
     | '/dashboard/reservations/$id'
     | '/dashboard/settings/hotel'
+    | '/dashboard/billing/invoice/$folioId'
   id:
     | '__root__'
     | '/'
@@ -323,6 +335,7 @@ export interface FileRouteTypes {
     | '/dashboard/guests/$id'
     | '/dashboard/reservations/$id'
     | '/dashboard/settings/hotel'
+    | '/dashboard/billing/invoice/$folioId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -513,8 +526,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/billing/invoice/$folioId': {
+      id: '/dashboard/billing/invoice/$folioId'
+      path: '/invoice/$folioId'
+      fullPath: '/dashboard/billing/invoice/$folioId'
+      preLoaderRoute: typeof DashboardBillingInvoiceFolioIdRouteImport
+      parentRoute: typeof DashboardBillingRoute
+    }
   }
 }
+
+interface DashboardBillingRouteChildren {
+  DashboardBillingInvoiceFolioIdRoute: typeof DashboardBillingInvoiceFolioIdRoute
+}
+
+const DashboardBillingRouteChildren: DashboardBillingRouteChildren = {
+  DashboardBillingInvoiceFolioIdRoute: DashboardBillingInvoiceFolioIdRoute,
+}
+
+const DashboardBillingRouteWithChildren =
+  DashboardBillingRoute._addFileChildren(DashboardBillingRouteChildren)
 
 interface DashboardGuestsRouteChildren {
   DashboardGuestsIdRoute: typeof DashboardGuestsIdRoute
@@ -553,7 +584,7 @@ const DashboardSettingsRouteWithChildren =
   DashboardSettingsRoute._addFileChildren(DashboardSettingsRouteChildren)
 
 interface DashboardRouteChildren {
-  DashboardBillingRoute: typeof DashboardBillingRoute
+  DashboardBillingRoute: typeof DashboardBillingRouteWithChildren
   DashboardChannelManagerRoute: typeof DashboardChannelManagerRoute
   DashboardFrontDeskRoute: typeof DashboardFrontDeskRoute
   DashboardGuestsRoute: typeof DashboardGuestsRouteWithChildren
@@ -570,7 +601,7 @@ interface DashboardRouteChildren {
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
-  DashboardBillingRoute: DashboardBillingRoute,
+  DashboardBillingRoute: DashboardBillingRouteWithChildren,
   DashboardChannelManagerRoute: DashboardChannelManagerRoute,
   DashboardFrontDeskRoute: DashboardFrontDeskRoute,
   DashboardGuestsRoute: DashboardGuestsRouteWithChildren,

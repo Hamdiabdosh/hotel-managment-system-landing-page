@@ -22,8 +22,12 @@ export const Route = createFileRoute("/dashboard/housekeeping")({
     try {
       const tasks = await getHousekeepingTasks({ data: { hotelId: hotel.id } });
       return { tasks };
-    } catch {
-      return { tasks: MOCK_HOUSEKEEPING };
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[dev] DB unavailable, falling back to mock data:", error);
+        return { tasks: MOCK_HOUSEKEEPING };
+      }
+      throw error;
     }
   },
   component: HousekeepingPage,

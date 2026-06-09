@@ -5,6 +5,13 @@ import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary"
 import { FolioView } from "@/components/billing/FolioView";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   addFolioCharge,
   closeFolio,
   getFoliosForHotel,
@@ -23,7 +30,13 @@ const searchSchema = z.object({
   folioId: z.string().optional(),
 });
 
-type PaymentMethod = "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BANK_TRANSFER" | "ROOM_CHARGE" | "OTHER";
+type PaymentMethod =
+  | "CASH"
+  | "CREDIT_CARD"
+  | "DEBIT_CARD"
+  | "BANK_TRANSFER"
+  | "ROOM_CHARGE"
+  | "OTHER";
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "CASH", label: "Cash" },
@@ -35,7 +48,12 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
 ];
 
 const CHARGE_CATEGORIES: FolioItemCategory[] = [
-  "FOOD", "BEVERAGE", "SPA", "LAUNDRY", "MINIBAR", "OTHER",
+  "FOOD",
+  "BEVERAGE",
+  "SPA",
+  "LAUNDRY",
+  "MINIBAR",
+  "OTHER",
 ];
 
 export const Route = createFileRoute("/dashboard/billing")({
@@ -53,8 +71,12 @@ export const Route = createFileRoute("/dashboard/billing")({
     try {
       const folios = await getFoliosForHotel({ data: { hotelId: hotel.id, status: "ALL" } });
       return { folios };
-    } catch {
-      return { folios: MOCK_FOLIOS };
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[dev] DB unavailable, falling back to mock data:", error);
+        return { folios: MOCK_FOLIOS };
+      }
+      throw error;
     }
   },
   component: BillingPage,
@@ -99,6 +121,13 @@ function BillingPage() {
   });
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+
+  const [voidDialog, setVoidDialog] = useState<{ itemId: string; description: string } | null>(
+    null,
+  );
+  const [voidReason, setVoidReason] = useState("");
+  const [voidLoading, setVoidLoading] = useState(false);
+  const [voidError, setVoidError] = useState<string | null>(null);
 
   const baseFolio = folios.find((f) => f.id === selectedId);
   const selected = useMemo((): (Folio & { extraItems?: FolioItem[] }) | undefined => {
@@ -193,15 +222,29 @@ function BillingPage() {
     }
   };
 
-  const handleVoidItem = async (itemId: string) => {
-    const reason = window.prompt("Reason for voiding this charge:");
-    if (!reason || !selected) return;
+  const handleVoidItem = (itemId: string) => {
+    const item = selected?.items.find((i) => i.id === itemId);
+    setVoidDialog({ itemId, description: item?.description ?? "this charge" });
+    setVoidReason("");
+    setVoidError(null);
+  };
 
+  const confirmVoid = async () => {
+    if (!voidReason.trim() || !voidDialog || !selected) {
+      setVoidError("Please provide a reason");
+      return;
+    }
+    setVoidLoading(true);
     try {
-      await voidFolioItem({ data: { itemId, folioId: selected.id, reason } });
+      await voidFolioItem({
+        data: { itemId: voidDialog.itemId, folioId: selected.id, reason: voidReason },
+      });
+      setVoidDialog(null);
       router.invalidate();
     } catch (err) {
-      console.warn("[billing] void item failed:", err);
+      setVoidError(err instanceof Error ? err.message : "Void failed");
+    } finally {
+      setVoidLoading(false);
     }
   };
 
@@ -231,7 +274,9 @@ function BillingPage() {
                   setExtraItems([]);
                 }}
                 className={`w-full rounded-xl border p-4 text-left transition-colors ${
-                  selectedId === f.id ? "border-foreground bg-muted/50" : "bg-card hover:bg-muted/30"
+                  selectedId === f.id
+                    ? "border-foreground bg-muted/50"
+                    : "bg-card hover:bg-muted/30"
                 }`}
               >
                 <div className="font-medium">{f.guestName}</div>
@@ -298,7 +343,9 @@ function BillingPage() {
                 className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
               >
                 {CHARGE_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
               </select>
             </div>
@@ -341,12 +388,16 @@ function BillingPage() {
                 className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
               >
                 {PAYMENT_METHODS.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Reference (optional)</label>
+              <label className="text-xs font-medium text-muted-foreground">
+                Reference (optional)
+              </label>
               <input
                 type="text"
                 placeholder="Transaction ref, cheque #, etc."
@@ -367,6 +418,45 @@ function BillingPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={!!voidDialog} onOpenChange={(open) => !open && setVoidDialog(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Void charge</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            You are about to void: <strong>{voidDialog?.description}</strong>
+          </p>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Reason</label>
+            <textarea
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              placeholder="Reason for voiding this charge…"
+              rows={3}
+              className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+            />
+          </div>
+          {voidError && <p className="text-sm text-rose-600">{voidError}</p>}
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setVoidDialog(null)}
+              className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmVoid}
+              disabled={voidLoading}
+              className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+            >
+              {voidLoading ? "Voiding…" : "Confirm void"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ModuleErrorBoundary>
   );
 }

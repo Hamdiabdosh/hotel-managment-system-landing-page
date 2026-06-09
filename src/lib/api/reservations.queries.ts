@@ -74,6 +74,7 @@ export const VALID_STATUS_TRANSITIONS: Partial<Record<ReservationStatus, Reserva
   PENDING: ["CONFIRMED"],
   CONFIRMED: ["CHECKED_IN", "CANCELLED", "NO_SHOW"],
   CHECKED_IN: ["CHECKED_OUT"],
+  CANCELLED: ["CONFIRMED"],
 };
 
 export function assertValidTransition(current: ReservationStatus, next: ReservationStatus): void {

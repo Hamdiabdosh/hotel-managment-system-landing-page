@@ -7,6 +7,23 @@ import type { Session } from "@/lib/auth/types";
 import { prisma } from "@/lib/prisma";
 import type { StaffRole } from "@/lib/types";
 
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const MAX_ATTEMPTS = 10;
+const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+function checkRateLimit(ip: string): void {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (entry && now < entry.resetAt) {
+    if (entry.count >= MAX_ATTEMPTS) {
+      throw new Error("Too many login attempts. Please try again in 15 minutes.");
+    }
+    entry.count++;
+  } else {
+    loginAttempts.set(ip, { count: 1, resetAt: now + WINDOW_MS });
+  }
+}
+
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(1, "Password is required"),
@@ -33,7 +50,12 @@ export const getCurrentSession = createServerFn({ method: "GET" }).handler(async
 
 export const login = createServerFn({ method: "POST" })
   .inputValidator(loginSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const ip =
+      (context as { request?: Request } | undefined)?.request?.headers?.get("x-forwarded-for") ??
+      "unknown";
+    checkRateLimit(ip);
+
     const user = await prisma.user.findFirst({
       where: { email: data.email.toLowerCase() },
     });

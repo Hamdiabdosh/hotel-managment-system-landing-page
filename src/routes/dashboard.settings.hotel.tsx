@@ -2,8 +2,10 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { toast } from "sonner";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
 import { getCurrentSession } from "@/lib/api/auth.functions";
+import { updateHotelSettings } from "@/lib/api/settings.functions";
 import { canAccess } from "@/lib/rbac";
 import { useHotelStore } from "@/store/hotelStore";
 import { formatCurrency } from "@/lib/format";
@@ -72,10 +74,24 @@ function HotelSettingsPage() {
 
   const watched = watch();
 
+  const onSubmit = async (formData: FormData) => {
+    try {
+      await updateHotelSettings({
+        data: {
+          hotelId: selectedHotel.id,
+          ...formData,
+        },
+      });
+      toast.success("Settings saved");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save settings");
+    }
+  };
+
   return (
     <ModuleErrorBoundary module="Settings">
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <form onSubmit={handleSubmit(() => alert("Settings saved (mock)"))} className="space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <section className="rounded-2xl border bg-card p-6 shadow-sm">
             <h3 className="font-serif text-lg font-semibold">Hotel Profile</h3>
             <div className="mt-4 space-y-3">

@@ -11,7 +11,7 @@ export interface ReservationFilters {
   dateTo: string;
 }
 
-const DEFAULT_FILTERS: ReservationFilters = {
+export const DEFAULT_FILTERS: ReservationFilters = {
   query: "",
   status: "ALL",
   source: "ALL",

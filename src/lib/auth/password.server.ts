@@ -13,6 +13,9 @@ export async function hashPassword(password: string): Promise<string> {
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   if (stored === "seed_placeholder") {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Unhashed seed user in production database — run db:reset");
+    }
     return password === DEV_PASSWORD;
   }
 
