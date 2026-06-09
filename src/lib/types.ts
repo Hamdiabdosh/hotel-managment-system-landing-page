@@ -40,7 +40,6 @@ export interface HotelConfig {
     pos: boolean;
     channelManager: boolean;
     loyaltyProgram: boolean;
-    multiProperty: boolean;
     maintenanceModule: boolean;
   };
 }

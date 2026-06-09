@@ -24,7 +24,6 @@ const schema = z.object({
   pos: z.boolean(),
   channelManager: z.boolean(),
   loyaltyProgram: z.boolean(),
-  multiProperty: z.boolean(),
   maintenanceModule: z.boolean(),
 });
 
@@ -67,7 +66,6 @@ function HotelSettingsPage() {
       pos: selectedHotel.features.pos,
       channelManager: selectedHotel.features.channelManager,
       loyaltyProgram: selectedHotel.features.loyaltyProgram,
-      multiProperty: selectedHotel.features.multiProperty,
       maintenanceModule: selectedHotel.features.maintenanceModule,
     },
   });
@@ -124,7 +122,7 @@ function HotelSettingsPage() {
           <section className="rounded-2xl border bg-card p-6 shadow-sm">
             <h3 className="font-serif text-lg font-semibold">Feature Toggles</h3>
             <div className="mt-4 space-y-2">
-              {(["pos", "channelManager", "loyaltyProgram", "multiProperty", "maintenanceModule"] as const).map((f) => (
+              {(["pos", "channelManager", "loyaltyProgram", "maintenanceModule"] as const).map((f) => (
                 <label key={f} className="flex items-center gap-2 text-sm">
                   <input type="checkbox" {...register(f)} className="rounded" />
                   <span className="capitalize">{f.replace(/([A-Z])/g, " $1")}</span>

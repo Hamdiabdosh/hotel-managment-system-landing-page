@@ -64,7 +64,7 @@ export type ActionKey = keyof typeof ACTION_PERMISSIONS;
 
 export function canAccess(role: StaffRole, route: string): boolean {
   const allowed = ROUTE_PERMISSIONS[route];
-  if (!allowed) return true; // unlisted routes are unrestricted
+  if (!allowed) return false;
   return allowed.includes(role);
 }
 

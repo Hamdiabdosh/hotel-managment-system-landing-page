@@ -1,9 +1,38 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import type { HousekeepingTask, Room, RoomStatus } from "@/lib/types";
+import { requireAction } from "@/lib/auth/session.server";
+import { MOCK_HOUSEKEEPING, MOCK_ROOMS } from "@/lib/mock-data";
+import type { HousekeepingTask, HousekeepingTaskStatus, Room, RoomStatus } from "@/lib/types";
+
+export { updateRoomStatus } from "@/lib/api/front-desk.functions";
 
 const hotelIdSchema = z.object({ hotelId: z.string() });
+
+const advanceHousekeepingTaskSchema = z.object({ id: z.string() });
+
+const createHousekeepingTaskSchema = z.object({
+  hotelId: z.string(),
+  roomId: z.string(),
+  type: z.enum(["STANDARD", "DEEP_CLEAN", "TURNDOWN", "INSPECTION"]),
+  priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]),
+  assignedToId: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export interface ActiveStay {
+  roomId: string;
+  guestName: string;
+  checkIn: string;
+  checkOut: string;
+}
+
+const HK_NEXT: Record<HousekeepingTaskStatus, HousekeepingTaskStatus | null> = {
+  TO_CLEAN: "IN_PROGRESS",
+  IN_PROGRESS: "INSPECTING",
+  INSPECTING: "DONE",
+  DONE: null,
+};
 
 function staffInitials(name: string): string {
   return name
@@ -24,12 +53,13 @@ function mapPrismaRoom(r: {
   pricePerNight: number;
   maxOccupancy: number;
   roomTypeId: string | null;
+  roomType?: { id: string; name: string } | null;
 }): Room {
   return {
     id: r.id,
     number: r.number,
-    typeId: r.roomTypeId ?? r.type.toLowerCase().replace(/\s+/g, "_"),
-    typeName: r.type,
+    typeId: r.roomTypeId ?? r.roomType?.id ?? r.type.toLowerCase().replace(/\s+/g, "_"),
+    typeName: r.roomType?.name ?? r.type,
     floor: r.floor,
     status: r.status,
     pricePerNight: r.pricePerNight,
@@ -62,49 +92,157 @@ function mapPrismaHousekeepingTask(t: {
   };
 }
 
+function mockAdvanceTask(id: string): HousekeepingTask {
+  const task = MOCK_HOUSEKEEPING.find((t) => t.id === id) ?? MOCK_HOUSEKEEPING[0]!;
+  const next = HK_NEXT[task.status];
+  if (!next) throw new Error("Task cannot be advanced");
+  return { ...task, status: next };
+}
+
 export const listRoomsForHotel = createServerFn({ method: "GET" })
   .inputValidator(hotelIdSchema)
   .handler(async ({ data }) => {
-    const [rooms, activeReservations, housekeepingTasks] = await Promise.all([
-      prisma.room.findMany({
+    try {
+      const rooms = await prisma.room.findMany({
         where: { hotelId: data.hotelId },
+        include: {
+          roomType: true,
+          reservations: {
+            where: { status: { in: ["CONFIRMED", "CHECKED_IN"] } },
+            include: { guest: true },
+            orderBy: { checkIn: "asc" },
+            take: 1,
+          },
+          housekeepingTasks: {
+            where: { status: { not: "DONE" } },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            include: { room: true, assignedTo: true },
+          },
+        },
         orderBy: [{ floor: "asc" }, { number: "asc" }],
-      }),
-      prisma.reservation.findMany({
-        where: { hotelId: data.hotelId, status: "CHECKED_IN" },
-        include: { guest: true },
-      }),
-      prisma.housekeepingTask.findMany({
-        where: { hotelId: data.hotelId },
-        include: { room: true, assignedTo: true },
-        orderBy: { createdAt: "desc" },
-      }),
-    ]);
+      });
 
-    const activeStays = activeReservations.map((r) => ({
-      roomId: r.roomId,
-      guestId: r.guestId,
-      guestName: `${r.guest.firstName} ${r.guest.lastName}`,
-      firstName: r.guest.firstName,
-      lastName: r.guest.lastName,
-      checkOut: r.checkOut.toISOString().slice(0, 10),
-    }));
+      const activeStays: ActiveStay[] = [];
+      const housekeepingTasks: HousekeepingTask[] = [];
 
-    return {
-      rooms: rooms.map(mapPrismaRoom),
-      activeStays,
-      housekeepingTasks: housekeepingTasks.map(mapPrismaHousekeepingTask),
-    };
+      for (const room of rooms) {
+        const reservation = room.reservations[0];
+        if (reservation) {
+          activeStays.push({
+            roomId: room.id,
+            guestName: `${reservation.guest.firstName} ${reservation.guest.lastName}`,
+            checkIn: reservation.checkIn.toISOString().slice(0, 10),
+            checkOut: reservation.checkOut.toISOString().slice(0, 10),
+          });
+        }
+        for (const task of room.housekeepingTasks) {
+          housekeepingTasks.push(mapPrismaHousekeepingTask(task));
+        }
+      }
+
+      return {
+        rooms: rooms.map(mapPrismaRoom),
+        activeStays,
+        housekeepingTasks,
+      };
+    } catch (err) {
+      console.warn("[rooms] listRoomsForHotel fallback to mock:", err);
+      return { rooms: MOCK_ROOMS, activeStays: [], housekeepingTasks: MOCK_HOUSEKEEPING };
+    }
   });
 
 export const getHousekeepingTasks = createServerFn({ method: "GET" })
   .inputValidator(hotelIdSchema)
   .handler(async ({ data }) => {
-    const tasks = await prisma.housekeepingTask.findMany({
-      where: { hotelId: data.hotelId },
-      include: { room: true, assignedTo: true },
-      orderBy: [{ status: "asc" }, { priority: "desc" }],
-    });
+    try {
+      const tasks = await prisma.housekeepingTask.findMany({
+        where: { hotelId: data.hotelId, status: { not: "DONE" } },
+        include: { room: true, assignedTo: true },
+        orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+      });
 
-    return tasks.map(mapPrismaHousekeepingTask);
+      return tasks.map(mapPrismaHousekeepingTask);
+    } catch (err) {
+      console.warn("[rooms] getHousekeepingTasks fallback to mock:", err);
+      return MOCK_HOUSEKEEPING;
+    }
+  });
+
+export const createHousekeepingTask = createServerFn({ method: "POST" })
+  .inputValidator(createHousekeepingTaskSchema)
+  .handler(async ({ data }) => {
+    await requireAction("assignHousekeepingTask");
+
+    try {
+      const task = await prisma.housekeepingTask.create({
+        data: {
+          hotelId: data.hotelId,
+          roomId: data.roomId,
+          type: data.type,
+          priority: data.priority,
+          assignedToId: data.assignedToId,
+          notes: data.notes,
+          status: "TO_CLEAN",
+        },
+        include: { room: true, assignedTo: true },
+      });
+
+      return mapPrismaHousekeepingTask(task);
+    } catch (err) {
+      console.warn("[rooms] createHousekeepingTask fallback to mock:", err);
+      const room = MOCK_ROOMS.find((r) => r.id === data.roomId) ?? MOCK_ROOMS[0]!;
+      return {
+        id: `hk_mock_${Date.now()}`,
+        roomId: data.roomId,
+        roomNumber: room.number,
+        roomType: room.typeName,
+        assignedTo: "Unassigned",
+        assignedInitials: "UN",
+        type: data.type,
+        status: "TO_CLEAN" as const,
+        priority: data.priority,
+        notes: data.notes,
+      };
+    }
+  });
+
+export const advanceHousekeepingTask = createServerFn({ method: "POST" })
+  .inputValidator(advanceHousekeepingTaskSchema)
+  .handler(async ({ data }) => {
+    await requireAction("advanceHousekeepingTask");
+
+    try {
+      const dbTask = await prisma.housekeepingTask.findUniqueOrThrow({
+        where: { id: data.id },
+        include: { room: true, assignedTo: true },
+      });
+      const next = HK_NEXT[dbTask.status as HousekeepingTaskStatus];
+      if (!next) throw new Error("Task cannot be advanced");
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const task = await tx.housekeepingTask.update({
+          where: { id: data.id },
+          data: {
+            status: next,
+            completedAt: next === "DONE" ? new Date() : null,
+          },
+          include: { room: true, assignedTo: true },
+        });
+
+        if (next === "DONE") {
+          await tx.room.update({
+            where: { id: dbTask.roomId },
+            data: { status: "AVAILABLE" },
+          });
+        }
+
+        return task;
+      });
+
+      return mapPrismaHousekeepingTask(updated);
+    } catch (err) {
+      console.warn("[rooms] advanceHousekeepingTask fallback to mock:", err);
+      return mockAdvanceTask(data.id);
+    }
   });

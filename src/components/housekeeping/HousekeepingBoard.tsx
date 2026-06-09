@@ -1,10 +1,9 @@
 import { useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ChevronRight } from "lucide-react";
-import {
-  advanceHousekeepingTask,
-  assignHousekeepingTask,
-} from "@/lib/api/front-desk.functions";
+import { toast } from "sonner";
+import { advanceHousekeepingTask } from "@/lib/api/rooms.functions";
+import { assignHousekeepingTask } from "@/lib/api/front-desk.functions";
 import { MOCK_STAFF } from "@/lib/mock-data";
 import { useHotelStore } from "@/store/hotelStore";
 import type { HousekeepingTask, HousekeepingTaskStatus } from "@/lib/types";
@@ -47,20 +46,20 @@ export function HousekeepingBoard({ tasks: initial, canAssign = true }: Props) {
     setTasks(initial);
   }, [initial]);
 
-  const advance = async (id: string) => {
-    const task = tasks.find((t) => t.id === id);
+  const handleAdvance = async (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
     const next = NEXT_STATUS[task.status];
     if (!next) return;
 
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: next } : t)));
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: next } : t)));
 
     try {
-      await advanceHousekeepingTask({ data: { taskId: id, hotelId: hotel.id } });
+      await advanceHousekeepingTask({ data: { id: taskId } });
       router.invalidate();
     } catch (err) {
-      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: task.status } : t)));
-      console.warn("[housekeeping] advance failed:", err);
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: task.status } : t)));
+      toast.error(err instanceof Error ? err.message : "Failed to update task");
     }
   };
 
@@ -139,7 +138,7 @@ export function HousekeepingBoard({ tasks: initial, canAssign = true }: Props) {
                     <div className="mt-3 flex gap-1">
                       {NEXT_STATUS[t.status] && (
                         <button
-                          onClick={() => advance(t.id)}
+                          onClick={() => handleAdvance(t.id)}
                           className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium hover:bg-muted"
                         >
                           Advance <ChevronRight className="h-3 w-3" />

@@ -1,14 +1,15 @@
 import type { Room } from "@/lib/types";
 import { ROOM_STATUS_COLORS } from "@/lib/mock-data";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 
 interface Props {
   room: Room;
   currency: string;
   onClick?: () => void;
+  activeStay?: { guestName: string; checkIn: string; checkOut: string };
 }
 
-export function RoomCard({ room, currency, onClick }: Props) {
+export function RoomCard({ room, currency, onClick, activeStay }: Props) {
   return (
     <button
       type="button"
@@ -17,6 +18,11 @@ export function RoomCard({ room, currency, onClick }: Props) {
     >
       <div className="font-serif text-2xl font-bold">{room.number}</div>
       <div className="mt-1 text-xs opacity-80">{room.typeName}</div>
+      {activeStay && room.status === "OCCUPIED" && (
+        <div className="mt-1 text-xs text-muted-foreground">
+          {activeStay.guestName} · out {formatDate(activeStay.checkOut)}
+        </div>
+      )}
       <div className="mt-3 text-[11px] font-semibold uppercase tracking-wider">
         {room.status.replace("_", " ")}
       </div>

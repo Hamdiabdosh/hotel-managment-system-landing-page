@@ -1,10 +1,10 @@
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { ModuleErrorBoundary } from "@/components/dashboard/ModuleErrorBoundary";
 import { RoomCard } from "@/components/rooms/RoomCard";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { updateRoomStatus } from "@/lib/api/front-desk.functions";
-import { listRoomsForHotel } from "@/lib/api/rooms.functions";
+import { listRoomsForHotel, updateRoomStatus } from "@/lib/api/rooms.functions";
 import { getCurrentSession } from "@/lib/api/auth.functions";
 import { canAccess } from "@/lib/rbac";
 import { useHotelStore } from "@/store/hotelStore";
@@ -56,6 +56,11 @@ function RoomsPage() {
   const [selected, setSelected] = useState<Room | null>(null);
   const [statusOverrides, setStatusOverrides] = useState<Record<string, RoomStatus>>({});
 
+  const activeStayByRoom = useMemo(
+    () => new Map(activeStays.map((s) => [s.roomId, s])),
+    [activeStays],
+  );
+
   const filteredRooms = rooms.filter((r) => {
     const status = statusOverrides[r.id] ?? r.status;
     if (statusFilter !== "ALL" && status !== statusFilter) return false;
@@ -96,7 +101,7 @@ function RoomsPage() {
       setSelected((prev) =>
         prev?.id === roomId && previous ? { ...prev, status: previous } : prev,
       );
-      console.warn("[rooms] status update failed:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to update room status");
     }
   };
 
@@ -131,7 +136,16 @@ function RoomsPage() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
             {filteredRooms.map((r) => {
               const room = statusOverrides[r.id] ? { ...r, status: statusOverrides[r.id]! } : r;
-              return <RoomCard key={r.id} room={room} currency={hotel.currency} onClick={() => setSelected(room)} />;
+              const stay = activeStayByRoom.get(r.id);
+              return (
+                <RoomCard
+                  key={r.id}
+                  room={room}
+                  currency={hotel.currency}
+                  activeStay={stay}
+                  onClick={() => setSelected(room)}
+                />
+              );
             })}
           </div>
         )}

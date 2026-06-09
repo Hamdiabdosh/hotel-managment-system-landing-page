@@ -1,6 +1,5 @@
 import { useRouterState } from "@tanstack/react-router";
-import { Bell, Search, ChevronDown, Menu } from "lucide-react";
-import { HOTEL_LIST } from "@/lib/config/hotels";
+import { Bell, Search, Menu } from "lucide-react";
 import { useHotelStore } from "@/store/hotelStore";
 import { useSidebarOpen } from "@/store/sidebarStore";
 import type { Session } from "@/lib/auth/types";
@@ -24,7 +23,7 @@ const TITLES: Record<string, string> = {
 };
 
 export function DashboardTopbar({ session }: { session: Session }) {
-  const { selectedHotel, setSelectedHotel } = useHotelStore();
+  const selectedHotel = useHotelStore((s) => s.selectedHotel);
   const { setOpen } = useSidebarOpen();
   const { user } = session;
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -46,17 +45,8 @@ export function DashboardTopbar({ session }: { session: Session }) {
       </button>
       <h1 className="font-serif text-xl font-semibold tracking-tight">{title}</h1>
 
-      <div className="relative ml-4">
-        <select
-          value={selectedHotel.slug}
-          onChange={(e) => setSelectedHotel(e.target.value)}
-          className="appearance-none rounded-md border bg-muted/40 py-1.5 pl-2.5 pr-8 text-xs font-medium"
-        >
-          {HOTEL_LIST.map((h) => (
-            <option key={h.slug} value={h.slug}>{h.name}</option>
-          ))}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+      <div className="ml-4 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs font-medium">
+        {selectedHotel.name}
       </div>
 
       <div className="ml-auto flex items-center gap-2">

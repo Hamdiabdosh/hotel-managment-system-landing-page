@@ -10,8 +10,13 @@ export interface SessionData {
   role: StaffRole;
 }
 
+const sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret && process.env.NODE_ENV === "production") {
+  throw new Error("SESSION_SECRET environment variable is required in production");
+}
+
 export const sessionConfig = {
-  password: process.env.SESSION_SECRET ?? "dev-insecure-secret-change-me",
+  password: sessionSecret ?? "dev-only-secret-not-for-production",
   name: "atrium_hms_session",
   maxAge: 60 * 60 * 24 * 7,
   cookie: {

@@ -3,8 +3,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { login, getCurrentSession } from "@/lib/api/auth.functions";
 import { ROLE_HOME } from "@/lib/rbac";
-import { HOTEL_LIST } from "@/lib/config/hotels";
-import { useHotelStore } from "@/store/hotelStore";
+import { HOTEL_CONFIG } from "@/lib/config/hotels";
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
@@ -22,10 +21,9 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const router = useRouter();
   const { redirect: redirectTo } = Route.useSearch();
-  const setSelectedHotel = useHotelStore((s) => s.setSelectedHotel);
-  const hotel = HOTEL_LIST[0]!;
+  const hotel = HOTEL_CONFIG;
 
-  const [email, setEmail] = useState("alex@grandpalace.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,8 +35,6 @@ function LoginPage() {
 
     try {
       const session = await login({ data: { email, password } });
-      const userHotel = HOTEL_LIST.find((h) => h.id === session.user.hotelId);
-      if (userHotel) setSelectedHotel(userHotel.slug);
       router.navigate({ to: redirectTo ?? ROLE_HOME[session.user.role] });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

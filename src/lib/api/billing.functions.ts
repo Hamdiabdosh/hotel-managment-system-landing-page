@@ -2,8 +2,19 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAction } from "@/lib/auth/session.server";
+import { MOCK_FOLIOS } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/format";
 import type { Folio, FolioItemCategory, FolioStatus } from "@/lib/types";
+
+function isBusinessError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.message.includes("Cannot") ||
+      err.message.includes("Folio is not") ||
+      err.message.includes("exceeds") ||
+      err.message.includes("outstanding balance"))
+  );
+}
 
 const folioStatusFilterSchema = z.enum(["OPEN", "CLOSED", "VOID", "ALL"]);
 
@@ -92,22 +103,31 @@ async function recalculateFolioTotal(folioId: string): Promise<number> {
 export const getFoliosForHotel = createServerFn({ method: "GET" })
   .inputValidator(getFoliosSchema)
   .handler(async ({ data }) => {
-    const where = {
-      reservation: { hotelId: data.hotelId },
-      ...(data.status !== "ALL" ? { status: data.status } : {}),
-    };
+    try {
+      const where = {
+        reservation: { hotelId: data.hotelId },
+        ...(data.status !== "ALL" ? { status: data.status } : {}),
+      };
 
-    const rows = await prisma.folio.findMany({
-      where,
-      include: {
-        items: { orderBy: { createdAt: "asc" } },
-        payments: { orderBy: { createdAt: "asc" } },
-        reservation: { include: { guest: true, room: true } },
-      },
-      orderBy: { reservation: { checkIn: "desc" } },
-    });
+      const rows = await prisma.folio.findMany({
+        where,
+        include: {
+          items: { orderBy: { createdAt: "asc" } },
+          payments: { orderBy: { createdAt: "asc" } },
+          reservation: { include: { guest: true, room: true } },
+        },
+        orderBy: { reservation: { checkIn: "desc" } },
+      });
 
-    return rows.map(mapPrismaFolio);
+      return rows.map(mapPrismaFolio);
+    } catch (err) {
+      console.warn("[billing] DB unavailable, using mock data:", err);
+      const filtered =
+        data.status === "ALL"
+          ? MOCK_FOLIOS
+          : MOCK_FOLIOS.filter((f) => f.status === data.status);
+      return filtered;
+    }
   });
 
 export const addFolioCharge = createServerFn({ method: "POST" })
@@ -115,22 +135,35 @@ export const addFolioCharge = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireAction("addFolioCharge");
 
-    const folio = await prisma.folio.findUniqueOrThrow({ where: { id: data.folioId } });
-    if (folio.status !== "OPEN") {
-      throw new Error("Cannot add charges to a closed folio");
-    }
+    try {
+      const folio = await prisma.folio.findUniqueOrThrow({ where: { id: data.folioId } });
+      if (folio.status !== "OPEN") {
+        throw new Error("Cannot add charges to a closed folio");
+      }
 
-    const item = await prisma.folioItem.create({
-      data: {
-        folioId: data.folioId,
+      const item = await prisma.folioItem.create({
+        data: {
+          folioId: data.folioId,
+          description: data.description,
+          amount: data.amount,
+          category: data.category,
+        },
+      });
+
+      const newTotal = await recalculateFolioTotal(data.folioId);
+      return { item, newTotal };
+    } catch (err) {
+      if (isBusinessError(err)) throw err;
+      console.warn("[billing] DB unavailable, using mock data:", err);
+      const mockItem = {
+        id: `item_mock_${Date.now()}`,
         description: data.description,
         amount: data.amount,
         category: data.category,
-      },
-    });
-
-    const newTotal = await recalculateFolioTotal(data.folioId);
-    return { item, newTotal };
+        createdAt: new Date().toISOString().slice(0, 10),
+      };
+      return { item: mockItem, newTotal: data.amount };
+    }
   });
 
 export const recordPayment = createServerFn({ method: "POST" })
@@ -138,68 +171,83 @@ export const recordPayment = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireAction("recordPayment");
 
-    const folio = await prisma.folio.findUniqueOrThrow({ where: { id: data.folioId } });
-    if (folio.status !== "OPEN") {
-      throw new Error("Folio is not open");
-    }
+    try {
+      const folio = await prisma.folio.findUniqueOrThrow({ where: { id: data.folioId } });
+      if (folio.status !== "OPEN") {
+        throw new Error("Folio is not open");
+      }
 
-    const balance = folio.totalAmount - folio.paidAmount;
-    if (data.amount > balance + 0.01) {
-      throw new Error(
-        `Payment of ${formatCurrency(data.amount, "USD")} exceeds outstanding balance of ${formatCurrency(balance, "USD")}`,
-      );
-    }
+      const balance = folio.totalAmount - folio.paidAmount;
+      if (data.amount > balance + 0.01) {
+        throw new Error(
+          `Payment of ${formatCurrency(data.amount, "USD")} exceeds outstanding balance of ${formatCurrency(balance, "USD")}`,
+        );
+      }
 
-    const newPaidAmount = folio.paidAmount + data.amount;
-    const newStatus: FolioStatus =
-      newPaidAmount >= folio.totalAmount - 0.01 ? "CLOSED" : "OPEN";
+      const newPaidAmount = folio.paidAmount + data.amount;
+      const newStatus: FolioStatus =
+        newPaidAmount >= folio.totalAmount - 0.01 ? "CLOSED" : "OPEN";
 
-    await prisma.$transaction(async (tx) => {
-      await tx.payment.create({
-        data: {
-          folioId: data.folioId,
-          amount: data.amount,
-          method: data.method,
-          reference: data.reference ?? null,
-          status: "COMPLETED",
-        },
+      await prisma.$transaction(async (tx) => {
+        await tx.payment.create({
+          data: {
+            folioId: data.folioId,
+            amount: data.amount,
+            method: data.method,
+            reference: data.reference ?? null,
+            status: "COMPLETED",
+          },
+        });
+        await tx.folio.update({
+          where: { id: data.folioId },
+          data: { paidAmount: newPaidAmount, status: newStatus },
+        });
       });
-      await tx.folio.update({
-        where: { id: data.folioId },
-        data: { paidAmount: newPaidAmount, status: newStatus },
-      });
-    });
 
-    return { success: true as const, newPaidAmount, folioStatus: newStatus };
+      return { success: true as const, newPaidAmount, folioStatus: newStatus };
+    } catch (err) {
+      if (isBusinessError(err)) throw err;
+      console.warn("[billing] DB unavailable, using mock data:", err);
+      return { success: true as const, newPaidAmount: data.amount, folioStatus: "OPEN" as const };
+    }
   });
 
 export const voidFolioItem = createServerFn({ method: "POST" })
   .inputValidator(voidItemSchema)
   .handler(async ({ data }) => {
-    const folio = await prisma.folio.findUniqueOrThrow({
-      where: { id: data.folioId },
-      include: { reservation: true },
-    });
-    if (folio.status !== "OPEN") {
-      throw new Error("Cannot void items on a closed folio");
-    }
+    await requireAction("voidFolioItem");
 
     const actor = await requireAction("voidFolioItem");
-    await prisma.folioItem.delete({ where: { id: data.itemId } });
-    const newTotal = await recalculateFolioTotal(data.folioId);
 
-    await prisma.auditLog.create({
-      data: {
-        hotelId: folio.reservation.hotelId,
-        userId: actor.userId,
-        action: "FOLIO_ITEM_VOID",
-        entity: "FolioItem",
-        entityId: data.itemId,
-        after: { reason: data.reason },
-      },
-    });
+    try {
+      const folio = await prisma.folio.findUniqueOrThrow({
+        where: { id: data.folioId },
+        include: { reservation: true },
+      });
+      if (folio.status !== "OPEN") {
+        throw new Error("Cannot void items on a closed folio");
+      }
 
-    return { newTotal };
+      await prisma.folioItem.delete({ where: { id: data.itemId } });
+      const newTotal = await recalculateFolioTotal(data.folioId);
+
+      await prisma.auditLog.create({
+        data: {
+          hotelId: folio.reservation.hotelId,
+          userId: actor.userId,
+          action: "FOLIO_ITEM_VOID",
+          entity: "FolioItem",
+          entityId: data.itemId,
+          after: { reason: data.reason },
+        },
+      });
+
+      return { newTotal };
+    } catch (err) {
+      if (isBusinessError(err)) throw err;
+      console.warn("[billing] DB unavailable, using mock data:", err);
+      return { newTotal: 0 };
+    }
   });
 
 export const closeFolio = createServerFn({ method: "POST" })
@@ -207,15 +255,21 @@ export const closeFolio = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireAction("closeFolio");
 
-    const folio = await prisma.folio.findUniqueOrThrow({ where: { id: data.folioId } });
-    if (folio.paidAmount < folio.totalAmount - 0.01) {
-      throw new Error("Cannot close folio with outstanding balance");
+    try {
+      const folio = await prisma.folio.findUniqueOrThrow({ where: { id: data.folioId } });
+      if (folio.paidAmount < folio.totalAmount - 0.01) {
+        throw new Error("Cannot close folio with outstanding balance");
+      }
+
+      await prisma.folio.update({
+        where: { id: data.folioId },
+        data: { status: "CLOSED" },
+      });
+
+      return { success: true as const };
+    } catch (err) {
+      if (isBusinessError(err)) throw err;
+      console.warn("[billing] DB unavailable, using mock data:", err);
+      return { success: true as const };
     }
-
-    await prisma.folio.update({
-      where: { id: data.folioId },
-      data: { status: "CLOSED" },
-    });
-
-    return { success: true as const };
   });

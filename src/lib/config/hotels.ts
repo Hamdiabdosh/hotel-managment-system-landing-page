@@ -1,6 +1,6 @@
 import type { HotelConfig } from "@/lib/types";
 
-const grandPalace: HotelConfig = {
+export const HOTEL_CONFIG: HotelConfig = {
   id: "h_grand_palace",
   slug: "grand-palace",
   name: "The Grand Palace",
@@ -117,117 +117,12 @@ const grandPalace: HotelConfig = {
     pos: true,
     channelManager: true,
     loyaltyProgram: true,
-    multiProperty: true,
     maintenanceModule: true,
   },
 };
 
-const sunsetInn: HotelConfig = {
-  id: "h_sunset_inn",
-  slug: "sunset-inn",
-  name: "Sunset Inn",
-  tagline: "Boutique warmth on the coast.",
-  description:
-    "A sun-drenched boutique hotel where terracotta walls meet sea breeze — relaxed, personal, unforgettable.",
-  starRating: 3,
-  logo: "SI",
-  coverImage:
-    "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=2000&q=80",
-  gallery: [
-    "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1551776235-dde6d4829808?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1559599238-308793637427?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80",
-  ],
-  theme: {
-    primaryColor: "#9C4221",
-    accentColor: "#F5E6D3",
-    fontHeading: "Fraunces",
-    fontBody: "Inter",
-    borderRadius: "round",
-  },
-  currency: "EUR",
-  timezone: "Europe/Lisbon",
-  address: "Rua do Mar 14, Cascais, Portugal",
-  phone: "+351 21 555 0199",
-  email: "hello@sunsetinn.pt",
-  amenities: [
-    { icon: "Waves", label: "Beach Access" },
-    { icon: "Coffee", label: "Café & Bar" },
-    { icon: "Bike", label: "Free Bikes" },
-    { icon: "Wifi", label: "Wi-Fi" },
-    { icon: "Sun", label: "Rooftop" },
-    { icon: "PawPrint", label: "Pet Friendly" },
-  ],
-  roomTypes: [
-    {
-      id: "rt_standard",
-      name: "Garden Room",
-      description: "Cozy 22m² room opening onto our citrus garden.",
-      pricePerNight: 140,
-      maxOccupancy: 2,
-      amenities: ["Queen Bed", "Garden View", "Wi-Fi"],
-      image:
-        "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: "rt_deluxe",
-      name: "Sea View Room",
-      description: "Bright room with a private balcony facing the Atlantic.",
-      pricePerNight: 220,
-      maxOccupancy: 2,
-      amenities: ["Balcony", "Sea View", "Espresso"],
-      image:
-        "https://images.unsplash.com/photo-1551776235-dde6d4829808?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: "rt_suite",
-      name: "Terracotta Suite",
-      description: "Top-floor suite with terrace and outdoor soaking tub.",
-      pricePerNight: 380,
-      maxOccupancy: 3,
-      amenities: ["Terrace", "Soaking Tub", "Lounge"],
-      image:
-        "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1200&q=80",
-    },
-  ],
-  testimonials: [
-    { name: "Anna Lima", quote: "Felt like staying with a stylish friend by the sea.", rating: 5 },
-    { name: "Tom Becker", quote: "Charming, easy, beautiful. We'll be back.", rating: 4 },
-    { name: "Maya Patel", quote: "Best rooftop sunset in Cascais.", rating: 5 },
-  ],
-  offers: [
-    {
-      title: "Long Weekend",
-      description: "Stay 3, pay 2 on Garden rooms.",
-      image:
-        "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80",
-      badge: "3 for 2",
-    },
-    {
-      title: "Surf & Stay",
-      description: "Two nights + surf lesson with local instructor.",
-      image:
-        "https://images.unsplash.com/photo-1502680390469-be75c86b636f?auto=format&fit=crop&w=900&q=80",
-      badge: "Active",
-    },
-  ],
-  features: {
-    pos: true,
-    channelManager: false,
-    loyaltyProgram: false,
-    multiProperty: false,
-    maintenanceModule: true,
-  },
-};
+export const HOTEL_SLUG = HOTEL_CONFIG.slug;
 
-export const HOTELS: Record<string, HotelConfig> = {
-  "grand-palace": grandPalace,
-  "sunset-inn": sunsetInn,
-};
-
-export const HOTEL_LIST = Object.values(HOTELS);
-
-export function getHotel(slug: string): HotelConfig | undefined {
-  return HOTELS[slug];
+export function getHotel(_slug?: string): HotelConfig {
+  return HOTEL_CONFIG;
 }
